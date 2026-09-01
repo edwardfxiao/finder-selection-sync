@@ -1,7 +1,7 @@
 {
   "name": "finder-selection-sync",
-  "version": "1.2.0",
-  "description": "Sync macOS Finder color-label selections across folders by matching original filenames.",
+  "version": "2.0.0",
+  "description": "Sync macOS Finder Tags across folders by matching original filenames.",
   "type": "module",
   "bin": {
     "finder-selection-sync": "bin/finder-selection-sync.js"
@@ -26,7 +26,7 @@
   "keywords": [
     "macos",
     "finder",
-    "finder-labels",
+    "finder-tags",
     "file-selection",
     "photo-workflow",
     "cli"

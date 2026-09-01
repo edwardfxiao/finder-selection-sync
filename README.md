@@ -1,8 +1,8 @@
 # finder-selection-sync
 
-Sync macOS Finder color-label selections across original and processed file folders.
+Sync macOS Finder Tags across original and processed file folders.
 
-The CLI treats a base folder as the reference selection and matches its filenames against one or more target folders. It can assign one color to a selection or copy each base file's existing Finder color label to its target matches. It works with processing workflows that append bracketed variants such as `-[variant-a][small]`.
+The CLI treats a base folder as the reference selection and matches its filenames against one or more target folders. It can assign one color tag to a selection or copy every Finder Tag from each base file to its target matches. A single file may contain multiple colors and custom named tags. It works with processing workflows that append bracketed variants such as `-[variant-a][small]`.
 
 ## Requirements
 
@@ -43,38 +43,47 @@ finder-selection-sync \
   --apply
 ```
 
-## Sync existing base labels
+## Sync existing base tags
 
-Copy the actual Finder color label from each labeled base file to every matching target file:
+Copy all Finder Tags from each tagged base file to every matching target file:
 
 ```bash
 finder-selection-sync \
   '/path/to/base' \
   '/path/to/processed-target-1' \
   '/path/to/processed-target-2' \
-  --sync-labels
+  --sync-tags
 ```
 
-The command above is a dry run. After reviewing each planned color, apply the changes:
+The command above is a dry run. After reviewing each planned tag set, apply the changes:
 
 ```bash
 finder-selection-sync <base> <target...> \
-  --sync-labels \
+  --sync-tags \
   --apply
 ```
 
-By default, unlabeled base files are skipped and do not change their target matches. To synchronize the unlabeled state as well, use `--include-clear`; matching target labels will then be cleared:
+By default, the base tag set replaces the complete target tag set. To preserve target-only tags and add the base tags, use `--merge-tags`:
 
 ```bash
 finder-selection-sync <base> <target...> \
-  --sync-labels \
+  --sync-tags \
+  --merge-tags \
+  --apply
+```
+
+Untagged base files are skipped and do not change their target matches. To synchronize the untagged state as well, use `--include-clear`; matching target tags will then be cleared:
+
+```bash
+finder-selection-sync <base> <target...> \
+  --sync-tags \
   --include-clear \
   --apply
 ```
 
-If duplicate base files have the same match key but different color labels, the CLI reports the conflicting files and makes no changes. Without `--include-clear`, an unlabeled duplicate is ignored when another duplicate has a color label.
+If duplicate base files have the same match key but different tag sets, the CLI reports the conflicting files and makes no changes. Tag order does not create a conflict. Without `--include-clear`, an untagged duplicate is ignored when another duplicate has tags.
 
-`--sync-labels` operates on targets and cannot be combined with `--scope base|both`, `--select`, `--color`, `--match`, or `--clear-all`.
+`--sync-tags` operates on targets and cannot be combined with `--scope base|both`, `--select`, `--color`, `--match`, or `--clear-all`.
 
 ## Positive and inverse selection
 
@@ -86,7 +95,7 @@ The default scope is `targets`.
 | Inverse | `--select unmatched` | Target files without a matching filename in base |
 | All | `--select all` | Every file in each target, regardless of matching |
 
-Apply a green label to the inverse selection in every target:
+Replace the tags on the inverse selection with a green color tag:
 
 ```bash
 finder-selection-sync \
@@ -98,9 +107,9 @@ finder-selection-sync \
   --apply
 ```
 
-## Clear labels
+## Clear tags
 
-Clear Finder color labels from every file in the target folders:
+Clear all Finder Tags from every file in the target folders:
 
 ```bash
 finder-selection-sync \
@@ -111,9 +120,9 @@ finder-selection-sync \
   --apply
 ```
 
-`--clear-all` is a shortcut for `--select all --color clear`. It follows the selected scope, which is `targets` by default. Without `--apply`, the command only previews the files whose labels would be cleared.
+`--clear-all` is a shortcut for `--select all --color clear`. It follows the selected scope, which is `targets` by default. Without `--apply`, the command only previews the files whose tags would be cleared.
 
-To clear labels only from a positive or inverse selection, combine that selection with `--color clear`:
+To clear tags only from a positive or inverse selection, combine that selection with `--color clear`:
 
 ```bash
 finder-selection-sync <base> <target...> \
@@ -135,13 +144,14 @@ Files with the same match key are all selected; the implementation does not disc
 ## Options
 
 ```text
---scope <base|targets|both>    Side on which labels are applied (default: targets)
+--scope <base|targets|both>    Side on which tag changes are applied (default: targets)
 --select <mode>                matched, unmatched, or all (default: matched)
---clear-all                    Shortcut for --select all --color clear
---sync-labels                  Copy existing base labels to matching target files
---include-clear                Also copy the unlabeled state with --sync-labels
+--clear-all                    Clear all Finder tags from the selected scope
+--sync-tags                    Copy all base Finder tags to matching target files
+--merge-tags                   Merge base and target tags instead of replacing
+--include-clear                Also copy the untagged state with --sync-tags
 --match <any|all>              Match base files in any or all targets (default: any)
---color <color>                Finder label color (default: green)
+--color <color>                Finder tag color (default: green)
 --apply                        Apply changes; otherwise preview only
 --no-recursive                 Do not scan nested folders
 --list-limit <number>          Maximum selected paths to print; 0 prints all
@@ -149,7 +159,7 @@ Files with the same match key are all selected; the implementation does not disc
 -h, --help                     Show help
 ```
 
-Available colors are `clear`, `gray`, `green`, `purple`, `blue`, `yellow`, `red`, and `orange`.
+Available colors are `clear`, `gray`, `green`, `purple`, `blue`, `yellow`, `red`, and `orange`. Applying a color replaces the selected files' tag sets with that single color tag. `clear` removes all tags from the selected files.
 
 `--match any|all` affects selection in `base` scope. Each target is compared directly with the base folder when the scope is `targets`.
 
@@ -175,11 +185,12 @@ finder-selection-sync <base> <target...> --scope both --apply
 
 ## Safety
 
-- The CLI never writes labels unless `--apply` is present.
+- The CLI never writes tags unless `--apply` is present.
 - Hidden files and hidden directories are ignored.
-- Existing `com.apple.FinderInfo` data is preserved; only the Finder color-label bits are changed.
-- `--sync-labels` skips unlabeled base files unless `--include-clear` is present.
-- Conflicting base labels stop the entire label-sync operation before any file is changed.
+- Existing unrelated `com.apple.FinderInfo` data is preserved; only Finder's color bits are updated for compatibility.
+- Modern Finder Tags are read from and written to `com.apple.metadata:_kMDItemUserTags`.
+- `--sync-tags` skips untagged base files unless `--include-clear` is present.
+- Conflicting base tag sets stop the entire tag-sync operation before any file is changed.
 - Paths are passed directly to `xattr` without shell interpolation.
 
 ## License
