@@ -12,6 +12,7 @@ import {
   getFinderTags,
   getMatchKey,
   parseArgs,
+  run,
   setFinderTags,
   VERSION,
 } from '../src/index.js';
@@ -152,6 +153,62 @@ test('CLI accepts tag sync options and rejects legacy or incompatible combinatio
     () => parseArgs(['/base', '/target', '--sync-tags', '--scope', 'both']),
     /only --scope targets/u,
   );
+});
+
+test('CLI accepts --delete-unmatched and rejects ambiguous combinations', () => {
+  const options = parseArgs(['/base', '/target', '--delete-unmatched', '--apply']);
+  assert.equal(options.deleteUnmatched, true);
+  assert.equal(options.apply, true);
+
+  assert.throws(
+    () => parseArgs(['/base', '/target', '--delete-unmatched', '--select', 'unmatched']),
+    /cannot be combined/u,
+  );
+  assert.throws(
+    () => parseArgs(['/base', '/target', '--delete-unmatched', '--color', 'clear']),
+    /cannot be combined/u,
+  );
+  assert.throws(
+    () => parseArgs(['/base', '/target', '--delete-unmatched', '--scope', 'base']),
+    /only --scope targets/u,
+  );
+  assert.throws(
+    () => parseArgs(['/base', '/target', '--delete-unmatched', '--sync-tags']),
+    /cannot be combined/u,
+  );
+});
+
+test('--delete-unmatched previews first and deletes only unmatched target files on apply', async context => {
+  const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'finder-selection-delete-'));
+  context.after(() => fs.rm(temporaryDirectory, { recursive: true, force: true }));
+  const base = path.join(temporaryDirectory, 'base');
+  const targetA = path.join(temporaryDirectory, 'target-a');
+  const targetB = path.join(temporaryDirectory, 'target-b');
+  await Promise.all([
+    fs.mkdir(base),
+    fs.mkdir(targetA),
+    fs.mkdir(targetB),
+  ]);
+  await Promise.all([
+    fs.writeFile(path.join(base, 'ITEM_0001.DAT'), 'base'),
+    fs.writeFile(path.join(targetA, 'ITEM_0001-[variant][a].dat'), 'matched'),
+    fs.writeFile(path.join(targetA, 'ITEM_0002-[variant][a].dat'), 'unmatched a'),
+    fs.writeFile(path.join(targetB, 'ITEM_0003-[variant][b].dat'), 'unmatched b'),
+  ]);
+
+  const previewOptions = parseArgs([base, targetA, targetB, '--delete-unmatched']);
+  const preview = await run(previewOptions);
+  assert.equal(preview.plan.filesToUpdate.length, 2);
+  assert.equal(
+    await fs.readFile(path.join(targetA, 'ITEM_0002-[variant][a].dat'), 'utf8'),
+    'unmatched a',
+  );
+
+  const applyOptions = parseArgs([base, targetA, targetB, '--delete-unmatched', '--apply']);
+  const applied = await run(applyOptions);
+  assert.equal(applied.failures.length, 0);
+  assert.deepEqual(await fs.readdir(targetA), ['ITEM_0001-[variant][a].dat']);
+  assert.deepEqual(await fs.readdir(targetB), []);
 });
 
 test('tag sync replaces, merges, and optionally includes untagged files', async () => {

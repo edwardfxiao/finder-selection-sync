@@ -66,6 +66,7 @@ Options:
   --sync-tags                    Copy all base Finder tags to matching target files
   --merge-tags                   Merge base and target tags instead of replacing
   --include-clear                Also copy the untagged state with --sync-tags
+  --delete-unmatched             Permanently delete target files not found in base
   --match <any|all>              Match a base file in any or all targets (default: any)
   --color <color>                clear/gray/green/purple/blue/yellow/red/orange
                                  (default: green)
@@ -114,6 +115,7 @@ export function parseArgs(args) {
     syncTags: false,
     mergeTags: false,
     includeClear: false,
+    deleteUnmatched: false,
     selectionSpecified: false,
     colorSpecified: false,
     matchSpecified: false,
@@ -136,6 +138,8 @@ export function parseArgs(args) {
       options.mergeTags = true;
     } else if (argument === '--include-clear') {
       options.includeClear = true;
+    } else if (argument === '--delete-unmatched') {
+      options.deleteUnmatched = true;
     } else if (argument === '--no-recursive') {
       options.recursive = false;
     } else if (argument === '--base') {
@@ -203,6 +207,16 @@ export function parseArgs(args) {
     }
     if (options.syncTags && (options.selectionSpecified || options.colorSpecified || options.matchSpecified)) {
       throw new Error('--sync-tags cannot be combined with --select, --color, or --match');
+    }
+    if (options.deleteUnmatched && options.scope !== 'targets') {
+      throw new Error('--delete-unmatched supports only --scope targets');
+    }
+    if (options.deleteUnmatched && (options.syncTags || options.clearAll)) {
+      throw new Error('--delete-unmatched cannot be combined with --sync-tags or --clear-all');
+    }
+    if (options.deleteUnmatched
+      && (options.selectionSpecified || options.colorSpecified || options.matchSpecified)) {
+      throw new Error('--delete-unmatched cannot be combined with --select, --color, or --match');
     }
   }
 
@@ -562,6 +576,28 @@ function printPlan(plan, baseFiles, targetFileGroups, options) {
   }
 }
 
+function printDeleteUnmatchedPlan(plan, baseFiles, targetFileGroups, options) {
+  console.log(`Mode: ${options.apply ? 'APPLY (permanently delete files)' : 'DRY-RUN (preview only)'}`);
+  console.log('Operation: delete unmatched target files');
+  console.log(`Base: ${baseFiles.length} files / ${plan.baseIndex.size} match keys`);
+  for (let index = 0; index < targetFileGroups.length; index += 1) {
+    console.log(
+      `Target ${index + 1}: ${targetFileGroups[index].length} files / `
+      + `${plan.targetIndexes[index].size} match keys / `
+      + `${plan.selectedTargets[index].length} unmatched files`,
+    );
+  }
+  console.log(`Files to delete: ${plan.filesToUpdate.length}`);
+
+  const visible = options.listLimit === 0
+    ? plan.filesToUpdate
+    : plan.filesToUpdate.slice(0, options.listLimit);
+  for (const file of visible) console.log(`  ${file}`);
+  if (visible.length < plan.filesToUpdate.length) {
+    console.log(`  ... ${plan.filesToUpdate.length - visible.length} more (use --list-limit 0 to show all)`);
+  }
+}
+
 function formatFinderTags(tags) {
   return tags.length === 0 ? '(none)' : tags.map(tag => JSON.stringify(tag)).join(', ');
 }
@@ -639,6 +675,36 @@ async function runTagSync(baseFiles, targetFileGroups, options) {
   return { plan, failures };
 }
 
+async function runDeleteUnmatched(baseFiles, targetFileGroups, options) {
+  const plan = createPlan(baseFiles, targetFileGroups, {
+    ...options,
+    scope: 'targets',
+    select: 'unmatched',
+    match: 'any',
+  });
+  printDeleteUnmatchedPlan(plan, baseFiles, targetFileGroups, options);
+
+  if (!options.apply) {
+    console.log('\nPreview only; no files were deleted. Add --apply to permanently delete these files.');
+    return { plan, failures: [] };
+  }
+
+  const failures = [];
+  let completed = 0;
+  for (const file of plan.filesToUpdate) {
+    try {
+      await fs.unlink(file);
+      completed += 1;
+    } catch (error) {
+      failures.push({ file, error });
+      console.error(`Failed to delete: ${file}\n  ${error.message}`);
+    }
+  }
+  console.log(`\nDone: ${completed} deleted, ${failures.length} failed.`);
+  if (failures.length > 0) process.exitCode = 2;
+  return { plan, failures };
+}
+
 export async function run(options) {
   const base = path.resolve(options.base);
   const targets = options.targets.map(target => path.resolve(target));
@@ -651,6 +717,9 @@ export async function run(options) {
     getFiles(base, options.recursive),
     ...targets.map(target => getFiles(target, options.recursive)),
   ]);
+  if (options.deleteUnmatched) {
+    return runDeleteUnmatched(baseFiles, targetFileGroups, options);
+  }
   if (options.syncTags) {
     return runTagSync(baseFiles, targetFileGroups, options);
   }

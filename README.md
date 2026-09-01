@@ -131,6 +131,25 @@ finder-selection-sync <base> <target...> \
   --apply
 ```
 
+## Delete unmatched target files
+
+Preview target files that do not have a matching filename in the base folder:
+
+```bash
+finder-selection-sync <base> <target...> --delete-unmatched
+```
+
+After reviewing the complete list, permanently delete those files:
+
+```bash
+finder-selection-sync <base> <target...> \
+  --delete-unmatched \
+  --list-limit 0 \
+  --apply
+```
+
+`--delete-unmatched` affects target files only. It does not delete base files or directories, and it cannot be combined with tag operations, `--select`, `--color`, or `--match`. Deletion is permanent and does not move files to the Trash.
+
 ## Filename matching
 
 Matching is case-insensitive. File extensions and the processing suffix beginning with the first `-[` are ignored. These files therefore share the match key `item_0001`:
@@ -150,6 +169,7 @@ Files with the same match key are all selected; the implementation does not disc
 --sync-tags                    Copy all base Finder tags to matching target files
 --merge-tags                   Merge base and target tags instead of replacing
 --include-clear                Also copy the untagged state with --sync-tags
+--delete-unmatched             Permanently delete target files not found in base
 --match <any|all>              Match base files in any or all targets (default: any)
 --color <color>                Finder tag color (default: green)
 --apply                        Apply changes; otherwise preview only
@@ -191,6 +211,7 @@ finder-selection-sync <base> <target...> --scope both --apply
 - Modern Finder Tags are read from and written to `com.apple.metadata:_kMDItemUserTags`.
 - `--sync-tags` skips untagged base files unless `--include-clear` is present.
 - Conflicting base tag sets stop the entire tag-sync operation before any file is changed.
+- `--delete-unmatched` is a dry run unless `--apply` is present, and it never deletes directories.
 - Paths are passed directly to `xattr` without shell interpolation.
 
 ## License

@@ -1,6 +1,6 @@
 {
   "name": "finder-selection-sync",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Sync macOS Finder Tags across folders by matching original filenames.",
   "type": "module",
   "bin": {
