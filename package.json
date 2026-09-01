@@ -1,0 +1,42 @@
+{
+  "name": "finder-selection-sync",
+  "version": "1.1.0",
+  "description": "Sync macOS Finder color-label selections across folders by matching original filenames.",
+  "type": "module",
+  "bin": {
+    "finder-selection-sync": "bin/finder-selection-sync.js"
+  },
+  "exports": "./src/index.js",
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "prepublishOnly": "npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edwardfxiao/finder-selection-sync.git"
+  },
+  "homepage": "https://github.com/edwardfxiao/finder-selection-sync#readme",
+  "bugs": {
+    "url": "https://github.com/edwardfxiao/finder-selection-sync/issues"
+  },
+  "keywords": [
+    "macos",
+    "finder",
+    "finder-labels",
+    "file-selection",
+    "photo-workflow",
+    "cli"
+  ],
+  "author": "Edward Xiao <edwardfxiao@gmail.com>",
+  "license": "MIT",
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
