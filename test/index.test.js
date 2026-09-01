@@ -7,7 +7,9 @@ import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import {
+  createLabelSyncPlan,
   createPlan,
+  getFinderLabel,
   getMatchKey,
   parseArgs,
   setFinderLabel,
@@ -116,6 +118,82 @@ test('--clear-all overrides selection and color regardless of argument order', (
   assert.equal(options.clearAll, true);
 });
 
+test('CLI accepts label sync options and rejects incompatible combinations', () => {
+  const options = parseArgs([
+    '/base',
+    '/target',
+    '--sync-labels',
+    '--include-clear',
+    '--apply',
+  ]);
+  assert.equal(options.syncLabels, true);
+  assert.equal(options.includeClear, true);
+  assert.equal(options.apply, true);
+
+  assert.throws(
+    () => parseArgs(['/base', '/target', '--sync-labels', '--color', 'red']),
+    /cannot be combined/u,
+  );
+  assert.throws(
+    () => parseArgs(['/base', '/target', '--include-clear']),
+    /requires --sync-labels/u,
+  );
+  assert.throws(
+    () => parseArgs(['/base', '/target', '--sync-labels', '--scope', 'both']),
+    /only --scope targets/u,
+  );
+});
+
+test('label sync copies existing colors and optionally includes clear', async () => {
+  const base = ['/base/A.JPG', '/base/B.JPG', '/base/C.JPG'];
+  const targets = [[
+    '/target/A-[variant][1].jpg',
+    '/target/B-[variant][1].jpg',
+    '/target/C-[variant][1].jpg',
+    '/target/D-[variant][1].jpg',
+  ]];
+  const labels = new Map([
+    ['/base/A.JPG', 'red'],
+    ['/base/B.JPG', 'clear'],
+    ['/base/C.JPG', 'orange'],
+  ]);
+  const readLabel = file => labels.get(file);
+
+  const labeledOnly = await createLabelSyncPlan(base, targets, { readLabel });
+  assert.deepEqual(labeledOnly.operations, [
+    { file: '/target/A-[variant][1].jpg', color: 'red', key: 'a' },
+    { file: '/target/C-[variant][1].jpg', color: 'orange', key: 'c' },
+  ]);
+  assert.equal(labeledOnly.skippedClearFiles, 1);
+
+  const includingClear = await createLabelSyncPlan(base, targets, {
+    includeClear: true,
+    readLabel,
+  });
+  assert.deepEqual(includingClear.operations, [
+    { file: '/target/A-[variant][1].jpg', color: 'red', key: 'a' },
+    { file: '/target/B-[variant][1].jpg', color: 'clear', key: 'b' },
+    { file: '/target/C-[variant][1].jpg', color: 'orange', key: 'c' },
+  ]);
+  assert.equal(includingClear.skippedClearFiles, 0);
+});
+
+test('label sync reports duplicate base keys with conflicting colors', async () => {
+  const base = ['/base/A.JPG', '/base/A.CR3'];
+  const targets = [['/target/A-[variant][1].jpg']];
+  const labels = new Map([
+    ['/base/A.JPG', 'red'],
+    ['/base/A.CR3', 'orange'],
+  ]);
+  const plan = await createLabelSyncPlan(base, targets, {
+    readLabel: file => labels.get(file),
+  });
+
+  assert.equal(plan.conflicts.length, 1);
+  assert.equal(plan.conflicts[0].key, 'a');
+  assert.deepEqual(plan.operations, []);
+});
+
 test('package version is exposed', () => {
   assert.match(VERSION, /^\d+\.\d+\.\d+$/u);
 });
@@ -127,6 +205,7 @@ test('Finder label writes and clearing preserve unrelated FinderInfo bits', {
   context.after(() => fs.rm(temporaryDirectory, { recursive: true, force: true }));
   const file = path.join(temporaryDirectory, 'fixture.dat');
   await fs.writeFile(file, 'fixture');
+  assert.equal(await getFinderLabel(file), 'clear');
 
   const original = Buffer.from(Array.from({ length: 32 }, (_, index) => index));
   original[9] = 0x01;
@@ -138,6 +217,7 @@ test('Finder label writes and clearing preserve unrelated FinderInfo bits', {
   ]);
 
   await setFinderLabel(file, 'red');
+  assert.equal(await getFinderLabel(file), 'red');
   const { stdout } = await execFile('/usr/bin/xattr', [
     '-px',
     'com.apple.FinderInfo',
@@ -148,7 +228,19 @@ test('Finder label writes and clearing preserve unrelated FinderInfo bits', {
   expected[9] = 0x0d;
   assert.deepEqual(actual, expected);
 
+  const targetFile = path.join(temporaryDirectory, 'fixture-[variant][small].dat');
+  await fs.writeFile(targetFile, 'target fixture');
+  const syncPlan = await createLabelSyncPlan([file], [[targetFile]]);
+  assert.deepEqual(syncPlan.operations, [{
+    file: targetFile,
+    color: 'red',
+    key: 'fixture',
+  }]);
+  await setFinderLabel(targetFile, syncPlan.operations[0].color);
+  assert.equal(await getFinderLabel(targetFile), 'red');
+
   await setFinderLabel(file, 'clear');
+  assert.equal(await getFinderLabel(file), 'clear');
   const { stdout: clearedStdout } = await execFile('/usr/bin/xattr', [
     '-px',
     'com.apple.FinderInfo',
@@ -157,4 +249,11 @@ test('Finder label writes and clearing preserve unrelated FinderInfo bits', {
   const cleared = Buffer.from(clearedStdout.replace(/\s/g, ''), 'hex');
   expected[9] = 0x01;
   assert.deepEqual(cleared, expected);
+
+  const clearPlan = await createLabelSyncPlan([file], [[targetFile]], {
+    includeClear: true,
+  });
+  assert.equal(clearPlan.operations[0].color, 'clear');
+  await setFinderLabel(targetFile, clearPlan.operations[0].color);
+  assert.equal(await getFinderLabel(targetFile), 'clear');
 });

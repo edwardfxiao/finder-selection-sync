@@ -24,6 +24,9 @@ const FINDER_LABEL_BITS = {
   red: 0x0c,
   orange: 0x0e,
 };
+const FINDER_BITS_TO_LABEL = new Map(
+  Object.entries(FINDER_LABEL_BITS).map(([color, bits]) => [bits, color]),
+);
 
 const VALID_SCOPES = new Set(['base', 'targets', 'both']);
 const VALID_SELECTIONS = new Set(['matched', 'unmatched', 'all']);
@@ -41,6 +44,8 @@ Options:
   --scope <base|targets|both>    Side on which labels are applied (default: targets)
   --select <mode>                matched, unmatched, or all (default: matched)
   --clear-all                    Shortcut for --select all --color clear
+  --sync-labels                  Copy existing base labels to matching target files
+  --include-clear                Also copy the unlabeled state with --sync-labels
   --match <any|all>              Match a base file in any or all targets (default: any)
   --color <color>                clear/gray/green/purple/blue/yellow/red/orange
                                  (default: green)
@@ -86,6 +91,11 @@ export function parseArgs(args) {
     help: false,
     version: false,
     clearAll: false,
+    syncLabels: false,
+    includeClear: false,
+    selectionSpecified: false,
+    colorSpecified: false,
+    matchSpecified: false,
   };
   const positional = [];
 
@@ -99,6 +109,10 @@ export function parseArgs(args) {
       options.apply = true;
     } else if (argument === '--clear-all') {
       options.clearAll = true;
+    } else if (argument === '--sync-labels') {
+      options.syncLabels = true;
+    } else if (argument === '--include-clear') {
+      options.includeClear = true;
     } else if (argument === '--no-recursive') {
       options.recursive = false;
     } else if (argument === '--base') {
@@ -112,12 +126,15 @@ export function parseArgs(args) {
       index += 1;
     } else if (argument === '--select') {
       options.select = requireValue(args, index, argument);
+      options.selectionSpecified = true;
       index += 1;
     } else if (argument === '--match') {
       options.match = requireValue(args, index, argument);
+      options.matchSpecified = true;
       index += 1;
     } else if (argument === '--color') {
       options.color = requireValue(args, index, argument).toLowerCase();
+      options.colorSpecified = true;
       index += 1;
     } else if (argument === '--list-limit') {
       options.listLimit = Number(requireValue(args, index, argument));
@@ -148,6 +165,18 @@ export function parseArgs(args) {
     if (!(options.color in FINDER_LABEL_BITS)) throw new Error(`Invalid --color: ${options.color}`);
     if (!Number.isInteger(options.listLimit) || options.listLimit < 0) {
       throw new Error('--list-limit must be an integer greater than or equal to 0');
+    }
+    if (options.includeClear && !options.syncLabels) {
+      throw new Error('--include-clear requires --sync-labels');
+    }
+    if (options.syncLabels && options.scope !== 'targets') {
+      throw new Error('--sync-labels supports only --scope targets');
+    }
+    if (options.syncLabels && options.clearAll) {
+      throw new Error('--sync-labels cannot be combined with --clear-all');
+    }
+    if (options.syncLabels && (options.selectionSpecified || options.colorSpecified || options.matchSpecified)) {
+      throw new Error('--sync-labels cannot be combined with --select, --color, or --match');
     }
   }
 
@@ -240,6 +269,23 @@ export function createPlan(baseFiles, targetFileGroups, options) {
   };
 }
 
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const result = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      result[index] = await mapper(items[index], index);
+    }
+  }
+
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return result;
+}
+
 async function readFinderInfo(filePath) {
   try {
     const { stdout } = await execFile('/usr/bin/xattr', [
@@ -261,6 +307,76 @@ async function readFinderInfo(filePath) {
     if (message.includes('No such xattr')) return Buffer.alloc(32);
     throw error;
   }
+}
+
+export async function getFinderLabel(filePath) {
+  const finderInfo = await readFinderInfo(filePath);
+  return FINDER_BITS_TO_LABEL.get(finderInfo[9] & 0x0e) ?? 'clear';
+}
+
+export async function createLabelSyncPlan(
+  baseFiles,
+  targetFileGroups,
+  { includeClear = false, readLabel = getFinderLabel } = {},
+) {
+  const baseIndex = indexFiles(baseFiles);
+  const targetIndexes = targetFileGroups.map(indexFiles);
+  const baseLabelEntries = await mapWithConcurrency(baseFiles, 8, async file => ({
+    file,
+    key: getMatchKey(file),
+    color: await readLabel(file),
+  }));
+  const candidatesByKey = new Map();
+  let skippedClearFiles = 0;
+
+  for (const entry of baseLabelEntries) {
+    if (entry.color === 'clear' && !includeClear) {
+      skippedClearFiles += 1;
+      continue;
+    }
+    const colors = candidatesByKey.get(entry.key) ?? new Map();
+    const files = colors.get(entry.color) ?? [];
+    files.push(entry.file);
+    colors.set(entry.color, files);
+    candidatesByKey.set(entry.key, colors);
+  }
+
+  const labelsByKey = new Map();
+  const conflicts = [];
+  for (const [key, colors] of candidatesByKey) {
+    if (colors.size === 1) {
+      labelsByKey.set(key, colors.keys().next().value);
+    } else {
+      conflicts.push({
+        key,
+        labels: [...colors].map(([color, files]) => ({ color, files })),
+      });
+    }
+  }
+
+  const operationsByTarget = targetIndexes.map(targetIndex => {
+    const operations = [];
+    for (const [key, files] of targetIndex) {
+      const color = labelsByKey.get(key);
+      if (color === undefined) continue;
+      for (const file of files) operations.push({ file, color, key });
+    }
+    return operations;
+  });
+  const operationsByFile = new Map();
+  for (const operations of operationsByTarget) {
+    for (const operation of operations) operationsByFile.set(operation.file, operation);
+  }
+
+  return {
+    baseIndex,
+    targetIndexes,
+    labelsByKey,
+    conflicts,
+    skippedClearFiles,
+    operationsByTarget,
+    operations: [...operationsByFile.values()],
+  };
 }
 
 export async function setFinderLabel(filePath, color) {
@@ -298,6 +414,73 @@ function printPlan(plan, baseFiles, targetFileGroups, options) {
   }
 }
 
+function printLabelSyncPlan(plan, baseFiles, targetFileGroups, options) {
+  console.log(`Mode: ${options.apply ? 'APPLY (sync labels)' : 'DRY-RUN (preview only)'}`);
+  console.log(`Operation: sync base labels; include clear: ${options.includeClear ? 'yes' : 'no'}`);
+  console.log(`Base: ${baseFiles.length} files / ${plan.baseIndex.size} match keys`);
+  console.log(`Base label keys to sync: ${plan.labelsByKey.size}`);
+  console.log(`Unlabeled base files skipped: ${plan.skippedClearFiles}`);
+  console.log(`Conflicting base keys: ${plan.conflicts.length}`);
+  for (let index = 0; index < targetFileGroups.length; index += 1) {
+    console.log(
+      `Target ${index + 1}: ${targetFileGroups[index].length} files / `
+      + `${plan.targetIndexes[index].size} match keys / `
+      + `${plan.operationsByTarget[index].length} updates`,
+    );
+  }
+  console.log(`Files to update: ${plan.operations.length}`);
+
+  for (const conflict of plan.conflicts) {
+    const colors = conflict.labels.map(label => label.color).join(', ');
+    console.log(`  CONFLICT ${conflict.key}: ${colors}`);
+    for (const label of conflict.labels) {
+      for (const file of label.files) console.log(`    [${label.color}] ${file}`);
+    }
+  }
+
+  const visible = options.listLimit === 0
+    ? plan.operations
+    : plan.operations.slice(0, options.listLimit);
+  for (const operation of visible) {
+    console.log(`  [${operation.color}] ${operation.file}`);
+  }
+  if (visible.length < plan.operations.length) {
+    console.log(`  ... ${plan.operations.length - visible.length} more (use --list-limit 0 to show all)`);
+  }
+}
+
+async function runLabelSync(baseFiles, targetFileGroups, options) {
+  const plan = await createLabelSyncPlan(baseFiles, targetFileGroups, {
+    includeClear: options.includeClear,
+  });
+  printLabelSyncPlan(plan, baseFiles, targetFileGroups, options);
+
+  if (plan.conflicts.length > 0) {
+    console.error('\nNo labels were changed because base files contain conflicting labels.');
+    if (options.apply) process.exitCode = 2;
+    return { plan, failures: [], conflicts: plan.conflicts };
+  }
+  if (!options.apply) {
+    console.log('\nPreview only; no files were modified. Add --apply to sync these labels.');
+    return { plan, failures: [] };
+  }
+
+  const failures = [];
+  let completed = 0;
+  for (const operation of plan.operations) {
+    try {
+      await setFinderLabel(operation.file, operation.color);
+      completed += 1;
+    } catch (error) {
+      failures.push({ ...operation, error });
+      console.error(`Failed to set ${operation.color}: ${operation.file}\n  ${error.message}`);
+    }
+  }
+  console.log(`\nDone: ${completed} succeeded, ${failures.length} failed.`);
+  if (failures.length > 0) process.exitCode = 2;
+  return { plan, failures };
+}
+
 export async function run(options) {
   const base = path.resolve(options.base);
   const targets = options.targets.map(target => path.resolve(target));
@@ -310,6 +493,9 @@ export async function run(options) {
     getFiles(base, options.recursive),
     ...targets.map(target => getFiles(target, options.recursive)),
   ]);
+  if (options.syncLabels) {
+    return runLabelSync(baseFiles, targetFileGroups, options);
+  }
   const plan = createPlan(baseFiles, targetFileGroups, options);
   printPlan(plan, baseFiles, targetFileGroups, options);
 

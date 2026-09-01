@@ -2,7 +2,7 @@
 
 Sync macOS Finder color-label selections across original and processed file folders.
 
-The CLI treats a base folder as the reference selection, matches its filenames against one or more target folders, and labels either the matching or non-matching target files. It works with processing workflows that append bracketed variants such as `-[variant-a][small]`.
+The CLI treats a base folder as the reference selection and matches its filenames against one or more target folders. It can assign one color to a selection or copy each base file's existing Finder color label to its target matches. It works with processing workflows that append bracketed variants such as `-[variant-a][small]`.
 
 ## Requirements
 
@@ -42,6 +42,39 @@ finder-selection-sync \
   '/path/to/processed-target' \
   --apply
 ```
+
+## Sync existing base labels
+
+Copy the actual Finder color label from each labeled base file to every matching target file:
+
+```bash
+finder-selection-sync \
+  '/path/to/base' \
+  '/path/to/processed-target-1' \
+  '/path/to/processed-target-2' \
+  --sync-labels
+```
+
+The command above is a dry run. After reviewing each planned color, apply the changes:
+
+```bash
+finder-selection-sync <base> <target...> \
+  --sync-labels \
+  --apply
+```
+
+By default, unlabeled base files are skipped and do not change their target matches. To synchronize the unlabeled state as well, use `--include-clear`; matching target labels will then be cleared:
+
+```bash
+finder-selection-sync <base> <target...> \
+  --sync-labels \
+  --include-clear \
+  --apply
+```
+
+If duplicate base files have the same match key but different color labels, the CLI reports the conflicting files and makes no changes. Without `--include-clear`, an unlabeled duplicate is ignored when another duplicate has a color label.
+
+`--sync-labels` operates on targets and cannot be combined with `--scope base|both`, `--select`, `--color`, `--match`, or `--clear-all`.
 
 ## Positive and inverse selection
 
@@ -105,6 +138,8 @@ Files with the same match key are all selected; the implementation does not disc
 --scope <base|targets|both>    Side on which labels are applied (default: targets)
 --select <mode>                matched, unmatched, or all (default: matched)
 --clear-all                    Shortcut for --select all --color clear
+--sync-labels                  Copy existing base labels to matching target files
+--include-clear                Also copy the unlabeled state with --sync-labels
 --match <any|all>              Match base files in any or all targets (default: any)
 --color <color>                Finder label color (default: green)
 --apply                        Apply changes; otherwise preview only
@@ -143,6 +178,8 @@ finder-selection-sync <base> <target...> --scope both --apply
 - The CLI never writes labels unless `--apply` is present.
 - Hidden files and hidden directories are ignored.
 - Existing `com.apple.FinderInfo` data is preserved; only the Finder color-label bits are changed.
+- `--sync-labels` skips unlabeled base files unless `--include-clear` is present.
+- Conflicting base labels stop the entire label-sync operation before any file is changed.
 - Paths are passed directly to `xattr` without shell interpolation.
 
 ## License
