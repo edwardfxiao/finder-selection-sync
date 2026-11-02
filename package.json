@@ -1,7 +1,7 @@
 {
   "name": "finder-selection-sync",
-  "version": "2.1.0",
-  "description": "Sync macOS Finder Tags across folders by matching original filenames.",
+  "version": "2.2.0",
+  "description": "Sync Finder tags, clean files by reference extension, and keep or delete files by list.",
   "type": "module",
   "bin": {
     "finder-selection-sync": "bin/finder-selection-sync.js"
@@ -13,7 +13,9 @@
   ],
   "scripts": {
     "test": "node --test",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "test:coverage": "node --test --experimental-test-coverage",
+    "test:finder-trash": "node scripts/finder-trash-integration.mjs"
   },
   "repository": {
     "type": "git",

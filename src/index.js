@@ -4,6 +4,10 @@ import process from 'node:process';
 import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
+import { getFiles, directoryRoot, assertSeparateRoots, snapshotFile } from './files.js';
+import { parseCleanupArgs, runCleanup, cleanupUsage, executeCleanup } from './cleanup.js';
+export { getFiles } from './files.js';
+export { parseCleanupArgs, prepareCleanup, executeCleanup, createPhotoPlan, createListPlan, parseList } from './cleanup.js';
 
 const execFile = promisify(execFileCallback);
 const require = createRequire(import.meta.url);
@@ -56,6 +60,9 @@ Match a base folder against one or more target folders by original filename,
 then apply or synchronize macOS Finder Tags.
 
 Usage:
+  finder-selection-sync clean-orphans <folder> --reference-ext <extension> [options]
+  finder-selection-sync clean-list <target...> --list <file> --mode <keep|delete> [options]
+  finder-selection-sync clean-orphans --help / clean-list --help
   finder-selection-sync <base> <target...> [options]
   finder-selection-sync --base <base> --target <target> [--target <target> ...] [options]
 
@@ -92,13 +99,14 @@ export function getMatchKey(filePath) {
 
 function requireValue(args, index, option) {
   const value = args[index + 1];
-  if (value === undefined || value.startsWith('--')) {
+  if (value === undefined || value === '' || value.startsWith('--')) {
     throw new Error(`Missing value after ${option}`);
   }
   return value;
 }
 
 export function parseArgs(args) {
+  if (['clean-orphans', 'clean-list'].includes(args[0])) return parseCleanupArgs(args);
   const options = {
     base: undefined,
     targets: [],
@@ -124,6 +132,7 @@ export function parseArgs(args) {
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
+    if (argument === '') throw new Error('Directory path must be non-empty');
     if (argument === '-h' || argument === '--help') {
       options.help = true;
     } else if (argument === '-v' || argument === '--version') {
@@ -231,24 +240,6 @@ async function assertDirectory(directoryPath, description) {
     throw new Error(`${description} does not exist or cannot be read: ${directoryPath} (${error.message})`);
   }
   if (!stat.isDirectory()) throw new Error(`${description} is not a directory: ${directoryPath}`);
-}
-
-export async function getFiles(directoryPath, recursive = true) {
-  const result = [];
-
-  async function visit(currentPath) {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
-    entries.sort((left, right) => left.name.localeCompare(right.name));
-    for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue;
-      const itemPath = path.join(currentPath, entry.name);
-      if (entry.isFile()) result.push(itemPath);
-      else if (recursive && entry.isDirectory()) await visit(itemPath);
-    }
-  }
-
-  await visit(directoryPath);
-  return result;
 }
 
 function indexFiles(files) {
@@ -689,25 +680,31 @@ async function runDeleteUnmatched(baseFiles, targetFileGroups, options) {
     return { plan, failures: [] };
   }
 
-  const failures = [];
-  let completed = 0;
-  for (const file of plan.filesToUpdate) {
-    try {
-      await fs.unlink(file);
-      completed += 1;
-    } catch (error) {
-      failures.push({ file, error });
-      console.error(`Failed to delete: ${file}\n  ${error.message}`);
-    }
+  plan.protectedSnapshots = await Promise.all(baseFiles.map(snapshotFile));
+  const protectedIds = new Set(plan.protectedSnapshots.map(item => `${item.dev}:${item.ino}`));
+  const candidates = await Promise.all(plan.filesToUpdate.map(snapshotFile));
+  if (candidates.some(item => protectedIds.has(`${item.dev}:${item.ino}`))) {
+    throw new Error('Deletion candidate is a hard link to a reference file; refusing deletion');
   }
-  console.log(`\nDone: ${completed} deleted, ${failures.length} failed.`);
-  if (failures.length > 0) process.exitCode = 2;
-  return { plan, failures };
+  plan.snapshots = [...plan.protectedSnapshots, ...candidates];
+  plan.inventories = [
+    { root: options.base, files: baseFiles, recursive: options.recursive },
+    ...options.targets.map((root, index) => ({ root, files: targetFileGroups[index], recursive: options.recursive })),
+  ];
+  const result = await executeCleanup(plan, { apply: true, permanent: true });
+  for (const { file, error } of result.failures) console.error(`Failed to delete: ${file}\n  ${error.message}`);
+  console.log(`\nDone: ${result.completed} deleted, ${result.failures.length} failed.`);
+  if (result.failures.length) process.exitCode = 2;
+  return result;
 }
 
 export async function run(options) {
-  const base = path.resolve(options.base);
-  const targets = options.targets.map(target => path.resolve(target));
+  if (options.command) return runCleanup(options);
+  const base = options.deleteUnmatched ? await directoryRoot(options.base) : path.resolve(options.base);
+  const targets = options.deleteUnmatched
+    ? await Promise.all(options.targets.map(directoryRoot))
+    : options.targets.map(target => path.resolve(target));
+  if (options.deleteUnmatched) assertSeparateRoots([base, ...targets]);
   await assertDirectory(base, 'base');
   await Promise.all(
     targets.map((target, index) => assertDirectory(target, `target ${index + 1}`)),
@@ -718,7 +715,8 @@ export async function run(options) {
     ...targets.map(target => getFiles(target, options.recursive)),
   ]);
   if (options.deleteUnmatched) {
-    return runDeleteUnmatched(baseFiles, targetFileGroups, options);
+    if (!baseFiles.length) throw new Error('Empty base folder: refusing deletion');
+    return runDeleteUnmatched(baseFiles, targetFileGroups, { ...options, base, targets });
   }
   if (options.syncTags) {
     return runTagSync(baseFiles, targetFileGroups, options);
@@ -752,7 +750,7 @@ export async function main(args = process.argv.slice(2)) {
   try {
     const options = parseArgs(args);
     if (options.help) {
-      console.log(usage.trim());
+      console.log((options.command ? cleanupUsage : usage).trim());
       return;
     }
     if (options.version) {
@@ -761,7 +759,7 @@ export async function main(args = process.argv.slice(2)) {
     }
     await run(options);
   } catch (error) {
-    console.error(`Error: ${error.message}\n\n${usage.trim()}`);
+    console.error(`Error: ${error.message}\n\n${(['clean-orphans', 'clean-list'].includes(args[0]) ? cleanupUsage : usage).trim()}`);
     process.exitCode = 1;
   }
 }

@@ -1,6 +1,64 @@
 # finder-selection-sync
 
-Sync macOS Finder Tags across original and processed file folders.
+Sync macOS Finder Tags across original and processed file folders, clean files by a reference extension, and keep or delete files using a text list.
+
+## Photo and list cleanup (2.2.0)
+
+These subcommands integrate the workflows previously provided by `photome` and `deletebutme`.
+
+```bash
+# Mixed folder: keep NEF and all matching filenames; preview orphan files of other extensions
+finder-selection-sync clean-orphans '/path/to/photos' --reference-ext nef
+
+# Any one extension can be the reference: CR3, JPG, ARW, DNG, etc.
+finder-selection-sync clean-orphans '/path/to/photos' --reference-ext jpg
+
+# Separate folders: base supplies reference filenames, targets are cleaned
+finder-selection-sync clean-orphans --base '/path/to/NEF' --target '/path/to/exports' --reference-ext nef
+
+# Keep filenames listed in a UTF-8 text file; preview everything else
+finder-selection-sync clean-list '/path/to/target' --list '/path/to/keep.txt' --mode keep
+
+# Delete only listed filenames; preview
+finder-selection-sync clean-list '/path/to/target' --list '/path/to/delete.txt' --mode delete
+```
+
+New commands are dry runs by default. Add `--apply` to move selected files to macOS Trash, or `--apply --permanent` to permanently delete. Trash uses Finder and may require macOS Automation permission. A failure stops subsequent operations without falling back to permanent deletion. `--list-limit 0` shows every candidate.
+
+`clean-orphans` uses `--reference-ext <extension>` to keep the specified extension and clean **all other extensions** that have no matching reference filename. No RAW-format setting or target-extension list is needed. For example:
+
+```text
+Input                         With --reference-ext nef
+A.NEF                         keep (reference)
+A.JPG / A.CR3 / A.XMP / A.TIF   keep (matching reference A.NEF)
+B.JPG / B.CR3 / B.XMP / B.PSD   clean (no B.NEF)
+```
+
+This includes orphan sidecars, documents and videos, not just image formats. Files without an extension (including names ending in a bare dot) are preserved. Reference-extension files are never selected, including those in target directories. In separate-folder mode only the **base** supplies reference keys; target reference files do not expand that set. With an empty reference and explicit `--allow-empty`, all eligible non-reference extensions are selected.
+
+The extension is case-insensitive, may include a leading dot (`nef`, `NEF`, `.nef`), and must be a single extension. `jpg` and `jpeg` are distinct: `--reference-ext jpg` uses only `.jpg` files as references; matching `.jpeg` files are retained as other formats. Matching uses the filename without its **last** extension, so `A.NEF.XMP` has stem `A.NEF`, not `A`.
+
+Matching is case-insensitive by relative subdirectory and filename stem; use `--match-by name` to ignore directories. Processing suffixes are **not** stripped. Separate reference and target roots must not overlap; use the single-folder syntax for mixed photos. Multiple `--target` folders are supported.
+
+The older `--reference cr3` / `--reference jpeg` options remain available with their original **paired CR3/JPEG-only scope**. They cannot be combined with `--reference-ext`. Use the new option for multi-format cleanup.
+
+Lists require explicit `--mode keep|delete`. Default matching is by full filename, including extension, with exact case and Unicode NFC normalization. Options:
+
+- `--match-by name|relative|stem`: full basename (default), relative file path, or basename without extension.
+- `--ignore-case`: case-insensitive list matching.
+- `--include-ext jpg,jpeg`: restrict eligible file types.
+- `--exclude-ext cr3,xmp`: always preserve these types; exclusions take precedence.
+- Multiple positional targets or repeated `--target` options.
+
+List lines may contain paths in name/stem modes; only the basename is used. Relative mode rejects absolute paths and traversal. A single leading UTF-8 encoding BOM is removed; any subsequent literal BOM character belongs to the filename. Blank lines are ignored, filename whitespace is preserved, and lines are not shell commands or comments. Lists and their hard links are protected from cleanup.
+
+Both commands support `--no-recursive` or `--depth N` (0 = top level), reject overlapping cleanup roots, and skip hidden entries and symlinks. Empty references/lists fail unless `--allow-empty` is explicitly passed. With an empty keep-list, all eligible candidates are selected; an empty delete-list selects nothing. Directories are never deleted. Planned files and directory inventories are rechecked before execution. During orphan cleanup, a newly matching reference stops further deletion; this check uses the same directory, case and Unicode rules as planning. Directory paths are revalidated before descent to detect substituted symlinks. These checks reduce stale-plan risks but do not make cleanup transactional; avoid concurrent changes while it runs.
+
+Use `clean-orphans --help` or `clean-list --help` for all options. Before publishing/installing this version, run `node ./bin/finder-selection-sync.js` from this checkout instead of the global command or `npx`.
+
+The original commands below remain supported. In particular, **legacy `--delete-unmatched --apply` still permanently deletes files**; it now refuses empty reference folders and overlapping roots. Relative base paths literally named `clean-orphans` or `clean-list` must use `./clean-orphans` / `./clean-list` to avoid subcommand parsing.
+
+## Finder tag workflows
 
 The CLI treats a base folder as the reference selection and matches its filenames against one or more target folders. It can assign one color tag to a selection or copy every Finder Tag from each base file to its target matches. A single file may contain multiple colors and custom named tags. It works with processing workflows that append bracketed variants such as `-[variant-a][small]`.
 
@@ -213,6 +271,22 @@ finder-selection-sync <base> <target...> --scope both --apply
 - Conflicting base tag sets stop the entire tag-sync operation before any file is changed.
 - `--delete-unmatched` is a dry run unless `--apply` is present, and it never deletes directories.
 - Paths are passed directly to `xattr` without shell interpolation.
+
+## Development and tests
+
+```bash
+npm test
+npm run test:coverage
+```
+
+Tests use temporary files and cover both cleanup directions, lists, filtering, filesystem guards, CLI integration, generated datasets, and Finder metadata. The default suite uses a substitute executor for Trash argument handling and failures and does not alter the user's Trash. An explicit macOS integration test exercises real Finder deletion, filename collisions, Unicode/quotes, list/reference preservation, and stopping when a new matching reference appears:
+
+```bash
+# From the source checkout only; may request macOS Automation permission
+npm run test:finder-trash
+```
+
+This opt-in test creates isolated temporary fixtures, verifies their contents at the exact Trash paths returned by Finder, then restores and removes only those fixtures. It never enumerates or empties Trash. It does not run under `npm test` or during publishing. If recovery fails, retain the printed fixture directory for investigation; do not empty Trash. Concurrency checks are not a filesystem transaction and cannot eliminate every race between checking a path and modifying it.
 
 ## License
 
