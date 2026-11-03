@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
 import { useI18n } from '@/lib/i18n';
-import { basename } from '@/lib/config';
+import { basename, finderColors } from '@/lib/config';
 import { usePopupKeyboard } from '@/lib/popup-keyboard';
 import type { Config, PathKind } from '@/types';
 
@@ -28,6 +29,30 @@ export function Choice({ label, value, choices, disabled, onChange }: {
 export function Check({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (value: boolean) => void }) {
   const id = useId();
   return <div className="check-field"><Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={value => onChange(value === true)} /><label htmlFor={id}>{label}</label></div>;
+}
+function TagPicker({ values, disabled, onChange }: { values: string[]; disabled: boolean; onChange: (values: string[]) => void }) {
+  const { t } = useI18n();
+  const id = useId();
+  const names = values.map(color => t(`color.${color}`)).join(', ');
+  return <div className="field"><label id={`${id}-label`} htmlFor={id}>{t('rule.colorLabel')}</label>
+    <DropdownMenu><DropdownMenuTrigger asChild>
+      <Button id={id} variant="outline" size="sm" className="tag-picker" disabled={disabled} aria-labelledby={`${id}-label`} aria-describedby={`${id}-selection`} title={names || t('rule.chooseTags')}>
+        <span className="tag-picker-value">{values.length > 0 && <span className="tags" aria-hidden="true">{values.map(color => <span key={color} className={`tag-dot color-${finderColorCodes[color]}`} />)}</span>}
+          <span>{values.length === 0 ? t('rule.chooseTags') : values.length === 1 ? names : t('rule.tagsSelected', { count: values.length })}</span>
+        </span><ChevronDown aria-hidden="true" />
+      </Button>
+    </DropdownMenuTrigger><DropdownMenuContent align="start" aria-labelledby={`${id}-label`} className="tag-picker-menu">
+      <DropdownMenuItem disabled={!values.length} onSelect={event => { event.preventDefault(); onChange([]); }}>
+        <X />{t('rule.clearTagSelection')}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      {finderColors.map(color => <DropdownMenuCheckboxItem key={color} checked={values.includes(color)} onSelect={event => event.preventDefault()}
+        onCheckedChange={checked => onChange(finderColors.filter(value => value === color ? checked === true : values.includes(value)))}>
+        <span className="tag"><span className={`tag-dot color-${finderColorCodes[color]}`} aria-hidden="true" />{t(`color.${color}`)}</span>
+      </DropdownMenuCheckboxItem>)}
+    </DropdownMenuContent></DropdownMenu>
+    <span id={`${id}-selection`} className="sr-only">{names || t('rule.chooseTags')}</span>
+  </div>;
 }
 function ClearButton({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
   return <Button className="folder-remove" variant="ghost" size="icon-xs" disabled={disabled} aria-label={label} title={label} onClick={onClick}><X /></Button>;
@@ -103,7 +128,7 @@ export function WorkflowConfig({ config: c, disabled, update, choose, dropped, r
   const [advanced, setAdvanced] = useState(false);
   const listEditor = useRef<HTMLTextAreaElement>(null);
   const mode = c.mode;
-  const select = (key: keyof Config, label: string, pairs: [string, string][]) => <Choice label={t(label)} value={String(c[key])} choices={pairs.map(([value, message]) => [value, key === 'color' ? <span className="tag"><span className={`tag-dot color-${finderColorCodes[value]}`} aria-hidden="true" />{t(message)}</span> : t(message)])} disabled={disabled} onChange={value => update({ [key]: value })} />;
+  const select = (key: keyof Config, label: string, pairs: [string, string][]) => <Choice label={t(label)} value={String(c[key])} choices={pairs.map(([value, message]) => [value, t(message)])} disabled={disabled} onChange={value => update({ [key]: value })} />;
   const check = (key: keyof Config, label: string) => <Check label={t(label)} checked={Boolean(c[key])} disabled={disabled} onChange={value => update({ [key]: value })} />;
   const field = (key: keyof Config, label: string, placeholder = '', wide = false) => <label className="field">{t(label)}<Input className={`${wide ? 'w-36' : 'w-20'} h-8 text-xs`} value={String(c[key])} placeholder={placeholder} disabled={disabled} onChange={event => update({ [key]: event.target.value }, 400)} /></label>;
   const source = mode === 'list' && c.listSource === 'text'
@@ -118,11 +143,11 @@ export function WorkflowConfig({ config: c, disabled, update, choose, dropped, r
     <div className="rules">
       {mode === 'orphans' && <>{field('referenceExt', 'rule.referenceExt')}{select('matchBy', 'rule.matchBy', [['relative','rule.relativeStem'],['name','rule.nameStem']])}</>}
       {mode === 'tags' && <>{select('tagAction','rule.operation',[['sync','rule.sync'],['color','rule.color'],['clear','rule.clear']])}
-        {c.tagAction === 'sync' ? check('mergeTags','rule.merge') : <>{c.tagAction === 'color' && select('color','rule.colorLabel',['green','red','blue','orange','yellow','purple','gray'].map(color => [color,`color.${color}`]))}{select('select','rule.selection',[['matched','rule.matched'],['unmatched','rule.unmatched'],['all','rule.all']])}</>}</>}
+        {c.tagAction === 'sync' ? check('mergeTags','rule.merge') : <>{c.tagAction === 'color' && <TagPicker values={c.colors} disabled={disabled} onChange={colors => update({ colors })} />}{select('select','rule.selection',[['matched','rule.matched'],['unmatched','rule.unmatched'],['all','rule.all']])}</>}</>}
       {mode === 'list' && <>{select('listMode','rule.listMode',[['keep','rule.keepList'],['delete','rule.deleteList']])}{select('matchBy','rule.matchBy',[['name','rule.fullName'],['relative','rule.relative'],['stem','rule.stem']])}{check('ignoreCase','rule.ignoreCase')}</>}
     </div>
     {mode === 'list' && c.listSource === 'text' && <Textarea ref={listEditor} aria-label={t('rule.onePerLine')} placeholder={t('rule.listPlaceholder')} className="list-editor" value={c.listText} maxLength={2000000} disabled={disabled} onChange={event => update({ listText: event.target.value }, 400)} />}
-    <p className={`rule-note ${mode === 'tags' && c.tagAction !== 'sync' ? 'text-destructive' : ''}`}>{t(mode === 'orphans' ? 'rule.orphanNote' : mode === 'list' ? c.listMode === 'keep' ? 'rule.keepNote' : 'rule.deleteNote' : c.tagAction === 'sync' ? 'rule.syncNote' : c.tagAction === 'color' ? 'rule.colorNote' : 'rule.clearNote')}</p>
+    <p className={`rule-note ${mode === 'tags' && c.tagAction !== 'sync' ? 'text-destructive' : ''}`}>{t(mode === 'orphans' ? 'rule.orphanNote' : mode === 'list' ? c.listMode === 'keep' ? 'rule.keepNote' : 'rule.deleteNote' : c.tagAction === 'sync' ? 'rule.syncNote' : c.tagAction === 'color' ? c.colors.length ? 'rule.colorNote' : 'error.tagsRequired' : 'rule.clearNote')}</p>
     <div className="config-toolbar"><span className="auto-preview"><span className="connection-dot" />{t('preview.auto')}</span>
       <div className="config-actions"><Button variant="ghost" size="sm" disabled={disabled} onClick={refresh} title={t('action.preview')}><RefreshCw />{t('action.refresh')}</Button><Button variant="ghost" size="sm" disabled={disabled} aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}><SlidersHorizontal />{t(advanced ? 'rule.less' : 'rule.more')}{advanced ? <ChevronUp /> : <ChevronDown />}</Button></div></div>
     {advanced && <div className="advanced">{check('recursive','rule.recursive')}{c.recursive && field('depth','rule.depth',t('rule.unlimited'))}

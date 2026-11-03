@@ -117,21 +117,31 @@ npm run dist:mac
 
 Artifacts are written to `electron/dist/`. Local builds target the current Mac architecture. The release workflow tests and builds an arm64 DMG on an Apple Silicon runner, then creates a Release in the current repository using `GITHUB_TOKEN` and attaches the installer. Normal branch pushes run CI only. Versions with a prerelease suffix are marked as prereleases. No npm publisher setup is needed to release the desktop app.
 
-Example release (`2.2.1` must match the Electron package version):
+Example release (`2.2.3` must match the Electron package version):
 
 ```bash
 npm --prefix electron version patch --no-git-tag-version
 npm run test:all
 npm run dist:mac
 git add .
-git commit -m "Release desktop 2.2.1"
-git tag desktop-v2.2.1
+git commit -m "Release desktop 2.2.3"
+git tag desktop-v2.2.3
 git push origin main
-git push origin desktop-v2.2.1
+git push origin desktop-v2.2.3
 ```
 
-Monitor **Actions → Release Electron app**. When both architecture builds and the release job succeed, open the repository's **Releases** page to download the DMGs. Running `npm run dist:mac` alone builds local files; pushing the `desktop-v...` tag is what triggers the GitHub release.
+Monitor **Actions → Release Electron app**. When the ARM64 build, packaged-app verification and release job succeed, open the repository's **Releases** page to download the DMGs. Running `npm run dist:mac` alone builds local files; pushing the `desktop-v...` tag is what triggers the GitHub release.
 
-The current builder configuration produces DMGs without Developer ID signing or notarization, so macOS Gatekeeper affects installation. For signed/notarized distribution, configure your own Apple Developer ID certificate, notarization credentials and `electron/electron-builder.cjs`. Apple signing is separate from GitHub/npm authentication.
+The builder ad-hoc signs the app bundle (`identity: "-"`) with hardened runtime enabled. `electron/build/entitlements.mac.plist` grants JIT execution and disables library validation for the app and helpers, which have no Developer ID Team ID in an ad-hoc build. Signing is required and verified. Do not use `identity: null`: skipping signing can leave an invalid signature after Electron resources are repackaged.
+
+After building, the release workflow runs the following check before uploading the DMG:
+
+```bash
+node electron/scripts/verify-mac-app.mjs "electron/dist/mac-arm64/Finder Selection Sync.app" --smoke
+```
+
+This verifies the app and nested code signatures, launches the actual packaged executable with a temporary profile, checks the React interface and IPC, and previews temporary fixture files without executing changes. The test closes its own app process and removes its temporary profile. It does not verify Gatekeeper trust or Apple notarization.
+
+Ad-hoc signing does not provide Developer ID trust or Apple notarization, so downloaded apps may still require approval under System Settings → Privacy & Security. For Developer ID-signed, notarized distribution, configure your own Apple certificate and notarization credentials, replace the ad-hoc identity and entitlements as appropriate, and enable notarization in `electron/electron-builder.cjs`. Apple signing is separate from GitHub/npm authentication. Publish fixes with a new desktop version and tag; an existing downloaded installer is not changed by updating the repository.
 
 Both products use the shared core from the same Git revision, but their release schedules are independent. UI-only changes can ship as desktop releases. For core behavior changes, verify both CLI and desktop tests and release the channels that need the change.

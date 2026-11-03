@@ -160,6 +160,45 @@ test('desktop: real Finder tags merge through processing suffixes and detect sta
   assert.equal(blocked.completed, 0);
   assert.equal(blocked.error.key, 'error.stale');
 });
+test('desktop: multiple color tags preview and write as a set, while equivalent sets and unmatched files are unchanged', { skip: process.platform !== 'darwin' }, async t => {
+  const f = await fixture(t, { 'base/A.NEF': 'a', 'base/B.NEF': 'b', 'target/A.JPG': 'a', 'target/B.JPG': 'b', 'target/C.JPG': 'c' });
+  const a = path.join(f.targets[0], 'A.JPG'), b = path.join(f.targets[0], 'B.JPG'), c = path.join(f.targets[0], 'C.JPG');
+  await setFinderTags(a, ['Previous\n4', 'Custom']);
+  await setFinderTags(b, ['Green\n2', 'Red\n6']);
+  await setFinderTags(c, ['Keep\n3']);
+  const plan = await f.service.preview({ ...f, mode: 'tags', tagAction: 'color', colors: ['red', 'green', 'red'] });
+  assert.equal(plan.candidates, 1);
+  assert.deepEqual(plan.rows.find(row => row.file === a).nextTags, ['Red\n6', 'Green\n2']);
+  assert.deepEqual(new Set(await getFinderTags(a)), new Set(['Previous\n4', 'Custom']));
+  const result = await f.service.execute(plan.id, selected(plan));
+  assert.equal(result.completed, 1);
+  assert.deepEqual(result.records[0].afterTags, ['Red\n6', 'Green\n2']);
+  assert.deepEqual(new Set(await getFinderTags(a)), new Set(['Red\n6', 'Green\n2']));
+  assert.deepEqual(new Set(await getFinderTags(b)), new Set(['Red\n6', 'Green\n2']));
+  assert.deepEqual(await getFinderTags(c), ['Keep\n3']);
+  assert.deepEqual(await getFinderTags(path.join(f.base, 'A.NEF')), []);
+  assert.deepEqual(f.calls, []);
+  // Removing all chosen colors is not an implicit clear operation.
+  await assert.rejects(f.service.preview({ ...f, mode: 'tags', tagAction: 'color', colors: [] }), /error.tagsRequired/);
+  assert.equal(f.service.active, null);
+  assert.deepEqual(new Set(await getFinderTags(a)), new Set(['Red\n6', 'Green\n2']));
+  const clear = await f.service.preview({ ...f, mode: 'tags', tagAction: 'clear', colors: [] });
+  assert.equal(clear.candidates, 2);
+  assert.equal((await f.service.execute(clear.id, selected(clear))).completed, 2);
+  assert.deepEqual(await getFinderTags(a), []);
+  assert.deepEqual(await getFinderTags(b), []);
+  assert.deepEqual(await getFinderTags(c), ['Keep\n3']);
+});
+test('desktop: tag color input accepts legacy settings and rejects malformed selections', () => {
+  const config = { mode: 'tags', base: '/base', targets: ['/target'], tagAction: 'color' };
+  assert.deepEqual(normalizeConfig({ ...config, color: 'purple' }).colors, ['purple']);
+  assert.deepEqual(normalizeConfig({ ...config, color: 'purple', colors: ['red', 'blue', 'red'] }).colors, ['red', 'blue']);
+  for (const colors of [null, 'red', {}, ['invalid'], [null], ['green', 2]]) {
+    assert.throws(() => normalizeConfig({ ...config, colors }), /error.color/);
+  }
+  assert.throws(() => normalizeConfig({ ...config, colors: [] }), /error.tagsRequired/);
+  for (const tagAction of ['sync', 'clear']) assert.deepEqual(normalizeConfig({ ...config, tagAction, colors: [] }).colors, []);
+});
 test('desktop: conflicting tag sources block all execution', async t => {
   const f = await fixture(t, { 'base/A.NEF':'a', 'base/A.JPG':'b', 'target/A.TIF':'c' });
   f.service.readTags = async file => file.endsWith('NEF') ? ['One'] : file.endsWith('JPG') ? ['Two'] : [];
@@ -249,6 +288,18 @@ test('auto preview: clearing required input and stopping prevent queued scans', 
   h.controller.update(config, 0); h.flush(); h.controller.stop();
   h.requests[0].resolve({id:'stopped'}); await tick();
   assert.equal(h.updates.some(update => update.plan?.id === 'stopped'), false);
+});
+test('auto preview: removing all tags suppresses an in-flight result and choosing tags again starts a fresh plan', async () => {
+  const h = previewHarness(), config = { mode: 'tags', tagAction: 'color', base: '/base', targets: ['/target'], colors: ['green'] };
+  h.controller.update(config); h.flush();
+  h.controller.update({ ...config, colors: [] }); h.flush();
+  h.requests[0].resolve({ id: 'obsolete' }); await tick();
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.updates.some(update => update.plan?.id === 'obsolete'), false);
+  h.controller.update({ ...config, colors: ['red', 'blue'] }); h.flush();
+  assert.deepEqual(h.requests[1].config.colors, ['red', 'blue']);
+  h.requests[1].resolve({ id: 'multi' }); await tick();
+  assert.equal(h.updates.some(update => update.plan?.id === 'multi'), true);
 });
 
 test('language packs: bundled keys and interpolation placeholders stay aligned', async () => {

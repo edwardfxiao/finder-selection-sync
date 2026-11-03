@@ -1,7 +1,8 @@
 import type { Config, Mode } from '../types';
+export const finderColors = ['green', 'red', 'blue', 'orange', 'yellow', 'purple', 'gray'];
 const common: Config = {
   mode: 'orphans', base: '', targets: [], recursive: true, depth: '', mixed: false, referenceExt: 'NEF', matchBy: 'relative',
-  tagAction: 'sync', color: 'green', select: 'matched', scope: 'targets', match: 'any', mergeTags: true, includeClear: false,
+  tagAction: 'sync', colors: ['green'], select: 'matched', scope: 'targets', match: 'any', mergeTags: true, includeClear: false,
   listSource: 'file', list: '', listText: '', listMode: 'keep', ignoreCase: false, includeExt: '', excludeExt: '',
 };
 export const defaults = (): Record<Mode, Config> => ({
@@ -17,7 +18,10 @@ export function preferences() {
     for (const key of Object.keys(config) as Mode[]) {
       if (saved?.config?.[key]) for (const field of Object.keys(common) as (keyof Config)[]) {
         const value = saved.config[key][field];
-        if (field === 'targets' && Array.isArray(value)) config[key].targets = value.filter(p => typeof p === 'string').slice(0, 32);
+        if (field === 'colors') {
+          if (Array.isArray(value)) config[key].colors = finderColors.filter(color => value.includes(color));
+          else if (value === undefined && finderColors.includes(saved.config[key].color)) config[key].colors = [saved.config[key].color];
+        } else if (field === 'targets' && Array.isArray(value)) config[key].targets = value.filter(p => typeof p === 'string').slice(0, 32);
         else if (typeof value === typeof common[field] && field !== 'mode' && field !== 'targets') Object.assign(config[key], { [field]: value });
       }
       config[key].mode = key;

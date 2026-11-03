@@ -31,6 +31,8 @@ jobs:
       - run: npm run test:images
       - run: npm run test:filesystem
       - run: npm --prefix electron run dist:mac -- --arm64
+      - name: Verify signatures and launch the packaged app
+        run: node electron/scripts/verify-mac-app.mjs "electron/dist/mac-arm64/Finder Selection Sync.app" --smoke
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-arm64

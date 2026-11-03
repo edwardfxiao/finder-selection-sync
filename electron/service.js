@@ -75,9 +75,11 @@ export function normalizeConfig(input) {
       ignoreCase: bool(input.ignoreCase), includeExt: extensionList(input.includeExt), excludeExt: extensionList(input.excludeExt) };
   }
   const tagAction = choice(input.tagAction, ['sync', 'color', 'clear'], 'sync');
-  const color = input.color ?? 'green';
-  if (!colors.has(color)) throw appError('error.color');
-  return { ...options, tagAction, color,
+  // Accept older desktop preferences that stored a single color.
+  const selectedColors = input.colors === undefined ? [input.color ?? 'green'] : input.colors;
+  if (!Array.isArray(selectedColors) || selectedColors.some(color => !colors.has(color))) throw appError('error.color');
+  if (tagAction === 'color' && !selectedColors.length) throw appError('error.tagsRequired');
+  return { ...options, tagAction, colors: [...new Set(selectedColors)],
     scope: tagAction === 'sync' ? 'targets' : choice(input.scope, ['targets', 'base', 'both'], 'targets'),
     select: choice(input.select, ['matched', 'unmatched', 'all'], 'matched'),
     match: choice(input.match, ['any', 'all'], 'any'),
@@ -267,7 +269,7 @@ export class DesktopService {
       conflicts = sync.conflicts;
     } else {
       const selected = createPlan(baseFiles, targetGroups, options).filesToUpdate;
-      const desired = options.tagAction === 'clear' ? [] : [finderColorAsTag(options.color)];
+      const desired = options.tagAction === 'clear' ? [] : options.colors.map(finderColorAsTag);
       operations = selected.filter(file => tagSignature(tags.get(file)) !== tagSignature(desired))
         .map(file => ({ file, currentTags: tags.get(file), tags: desired }));
     }

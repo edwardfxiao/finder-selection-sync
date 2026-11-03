@@ -4,7 +4,7 @@ export type Issue = Message & { message?: string };
 export type Config = {
   mode: Mode; base: string; targets: string[]; recursive: boolean; depth: string;
   mixed: boolean; referenceExt: string; matchBy: string;
-  tagAction: string; color: string; select: string; scope: string; match: string;
+  tagAction: string; colors: string[]; select: string; scope: string; match: string;
   mergeTags: boolean; includeClear: boolean;
   listSource: string; list: string; listText: string; listMode: string;
   ignoreCase: boolean; includeExt: string; excludeExt: string;

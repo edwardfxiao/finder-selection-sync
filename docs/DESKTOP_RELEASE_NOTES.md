@@ -1,3 +1,10 @@
+## Changes in 2.2.3
+
+- Assign multiple Finder color tags, with saved single-color preferences migrated automatically.
+- Require at least one selected tag before previewing tag assignment.
+- Ad-hoc sign the app and helper processes so the repackaged bundle has valid code signatures.
+- Verify bundle integrity and launch the packaged app in a temporary profile before uploading the ARM64 installer.
+
 ## Changes in 2.2.2
 
 - Clear session activity records without changing files or exported reports.
@@ -26,6 +33,6 @@ Open the DMG and install the app in Applications.
 
 ## Signing status
 
-These installers are not Developer ID signed or notarized by Apple. macOS Gatekeeper may block launch or require explicit approval. This release is intended for users who understand and accept that distribution limitation; it is not a signed/notarized production build.
+The app is ad-hoc signed to verify bundle integrity. It is not Developer ID signed or notarized by Apple, so macOS Gatekeeper may still block launch or require explicit approval under System Settings → Privacy & Security. Ad-hoc signing does not establish developer identity or replace notarization.
 
 Do not move or edit the same files concurrently while an operation is running. File operations are checked before execution but are not atomic transactions.

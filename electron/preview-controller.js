@@ -2,6 +2,7 @@ export function canPreview(config) {
   if (!config) return false;
   if (config.mode !== 'list' && !config.base) return false;
   if (!(config.mode === 'orphans' && config.mixed) && !config.targets?.length) return false;
+  if (config.mode === 'tags' && config.tagAction === 'color' && Array.isArray(config.colors) && !config.colors.length) return false;
   return config.mode !== 'list' || (config.listSource === 'text' ? Boolean(config.listText?.trim()) : Boolean(config.list));
 }
 

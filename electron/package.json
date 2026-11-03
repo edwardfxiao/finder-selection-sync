@@ -1,6 +1,6 @@
 {
   "name": "finder-selection-sync-desktop",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "private": true,
   "description": "macOS desktop app for Finder Selection Sync.",
   "type": "module",

@@ -95,7 +95,7 @@ npm run transfer         # Portable source archive in transfer/
 
 UI tests run in jsdom. They exercise React/Radix interactions and connect the app to the real desktop service and shared core using temporary files. Integration cases cover all three workflows, declined confirmations, checked-only execution, stale files, list editing, error recovery, delayed path requests across workflow switches, and a 1,004-file preview. OS dialogs, Trash and tag writes are substituted in those integration cases; layout, trackpad behavior and native dialog interaction still require a manual macOS check. The image and filesystem smoke tests run in Electron itself.
 
-Local builds target the current Mac architecture. The desktop release workflow builds only arm64 on an Apple Silicon runner. Builds currently have no Developer ID signing or notarization; configure your own Apple credentials and the builder configuration before distributing a signed/notarized app. A packaged app runs without a separate Node.js installation or a published npm package.
+Local builds target the current Mac architecture. The desktop release workflow builds only arm64 on an Apple Silicon runner. App bundles are ad-hoc signed, and releases verify signatures and launch the packaged app before uploading the installer. Ad-hoc signing verifies bundle integrity but does not provide Developer ID trust or Apple notarization; Gatekeeper can still require approval. Configure your own Apple credentials and builder settings for Developer ID-signed, notarized distribution. A packaged app runs without a separate Node.js installation or a published npm package.
 
 ## Photo and list cleanup (2.2.0)
 

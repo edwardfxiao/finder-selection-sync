@@ -84,6 +84,7 @@ export default function App() {
   }, [mode, config]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.metaKey && event.key === 'Enter' && !jobRef.current && modeRef.current !== 'history') {
         event.preventDefault(); controller.update(configRef.current[modeRef.current], 0); setRun(null);
       }
