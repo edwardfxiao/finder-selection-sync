@@ -1,0 +1,68 @@
+name: Release Electron app
+
+on:
+  push:
+    tags: ['desktop-v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Validate desktop tag
+        run: node scripts/check-release.mjs desktop "$RELEASE_TAG"
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+      - run: npm run setup:desktop
+      - run: npm test
+      - run: npm run test:desktop
+      - run: npm run test:ui
+      - run: npm run test:images
+      - run: npm run test:filesystem
+      - run: npm --prefix electron run dist:mac -- --${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.arch }}
+          path: electron/dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: artifacts
+          merge-multiple: true
+      - name: Publish installers to this repository's GitHub Releases
+        run: |
+          FLAGS=()
+          if [[ "$RELEASE_TAG" == *-*.*.*-* ]]; then FLAGS+=(--prerelease --latest=false); else FLAGS+=(--latest); fi
+          gh release create "$RELEASE_TAG" artifacts/*.dmg --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --generate-notes --notes-file docs/DESKTOP_RELEASE_NOTES.md --title "Finder Selection Sync ${RELEASE_TAG#desktop-v}" "${FLAGS[@]}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}

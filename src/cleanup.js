@@ -1,8 +1,7 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { getFiles, directoryRoot, assertSeparateRoots, snapshotFile, verifySnapshot, verifyInventory } from './files.js';
+import { fileSystem as fs, getFiles, directoryRoot, assertSeparateRoots, snapshotFile, verifySnapshot, verifyInventory } from './files.js';
 
 const execute = promisify(execFile);
 export const cleanupUsage = `
@@ -202,7 +201,7 @@ export async function moveToTrash(file, exec = execute) {
   return result?.stdout?.replace(/\n$/u, '');
 }
 
-export async function executeCleanup(plan, options, { trash = moveToTrash, unlink = fs.unlink } = {}) {
+export async function executeCleanup(plan, options, { trash = moveToTrash, unlink = fs.unlink, shouldCancel = () => false } = {}) {
   if (!options.apply) return { plan, completed: 0, failures: [] };
   // Verify the whole plan before the first mutation, then each candidate again.
   for (const inventory of plan.inventories ?? []) await verifyInventory(inventory);
@@ -212,6 +211,7 @@ export async function executeCleanup(plan, options, { trash = moveToTrash, unlin
   const changedInodes = new Set();
   let completed = 0;
   for (const file of plan.filesToUpdate) {
+    if (shouldCancel()) return { plan, completed, failures, cancelled: true };
     try {
       for (const reference of plan.liveSnapshots ?? []) await verifySnapshot(reference);
       if (plan.verifyReference) await plan.verifyReference(file);
@@ -221,6 +221,7 @@ export async function executeCleanup(plan, options, { trash = moveToTrash, unlin
       // Removing an earlier hard link changes the shared inode's ctime.
       // Continue checking identity, size and modification time for its other links.
       await verifySnapshot(snapshot, { ignoreCtime: changedInodes.has(identity) });
+      if (shouldCancel()) return { plan, completed, failures, cancelled: true };
       if (options.permanent) await unlink(file);
       else await trash(file);
       changedInodes.add(identity);

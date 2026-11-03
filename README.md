@@ -2,6 +2,101 @@
 
 Sync macOS Finder Tags across original and processed file folders, clean files by a reference extension, and keep or delete files using a text list.
 
+## Repository and releases
+
+One repository contains two independently versioned products:
+
+```text
+bin/                     CLI entry point
+src/                     Shared matching, Finder tag and cleanup core
+test/                    CLI/core regression tests
+package.json             Public npm CLI package (Node.js 18+, no runtime dependencies)
+electron/
+  package.json           Private desktop package, its own version and dependencies
+  package-lock.json      Desktop dependency lockfile
+  main.js / preload.cjs  Electron integration
+  service.js             Desktop preview/execution adapter using the shared core
+  renderer/              React 19 / shadcn UI
+  locales/               Editable JSON language packs
+  test/                  Desktop service and packaging tests
+  scripts/               Desktop staging and native image checks
+  electron-builder.cjs   macOS packaging configuration
+scripts/                 CLI package validation and source transfer
+.github/workflows/       CI, npm publishing, desktop releases
+```
+
+Electron depends on the root package through `file:..`; changes to `src/` are used directly during development. Packaging stages a self-contained copy of that same core under the app's `node_modules`, preserving the core's own version metadata. Do not edit generated files in `electron/.build/`.
+
+The npm tarball contains only the CLI/core and package documentation. Electron, React, renderer code and installers are excluded. `npm-v<version>` tags publish the root package to npm; `desktop-v<version>` tags build Apple Silicon and Intel DMGs for GitHub Releases. Ordinary commits only run CI. The desktop package is `private: true`.
+
+**Moving to another Mac / continuing with another account:** see [Development, transfer and release guide](docs/DEVELOPMENT.md). Run `npm run transfer` to create a source archive containing current work and Git history, without dependencies, build outputs, account configuration or a configured remote. The npm package name is **`finder-selection-sync`**. When transferring to a different account, review the GitHub repository URLs and author metadata before publishing.
+
+## Desktop app
+
+The macOS Electron app uses **React 19, TypeScript, shadcn/ui and Tailwind CSS**. Use Node.js **24** for development (`.nvmrc`); desktop tools require 22.12+, and the published CLI still supports Node.js 18+.
+
+```bash
+npm ci
+npm run setup:desktop
+npm start
+```
+
+Choose one of three workflows in the sidebar: reference cleanup, Finder tags, or list cleanup. Click anywhere in a reference, target, or list-file region to choose a path, or drop files/folders from Finder. Adjust the rules, review the preview, and uncheck individual files before confirming the operation.
+
+Right-click a selected reference folder, target folder, or list file to **Show in Finder**. The menu also opens with Shift+F10 or the context-menu key while a path is focused. Click an existing target row to replace just that folder with a single folder; cancelling keeps the current selection. Use **+ Add** at the top right of the target-folder header to append folders. Hover and keyboard-focus feedback stays within the content row, including empty placeholders. The active highlight lasts only while the picker or context menu is open, then clears. Each selected path has a **×** control that clears only that selection; it does not delete the file or folder. Pasted lists also have a clear button.
+
+- Every rule or folder change automatically refreshes the preview. Text input is debounced by 400 ms; outdated scans are cancelled and their results discarded. A manual refresh is also available for changes made outside the app. Refreshes show a skeleton in the preview area and keep the folder section's collapsed state. File operations retain their progress and stop controls.
+- **Expand preview** opens a large dialog with the same search, filters, pages and checked files. Closing it preserves those choices in the workspace. In dropdowns and selects, Tab / Shift+Tab close the popup and move to the next / previous control; Up / Down wrap through enabled options, and Enter selects the focused item.
+- The workflow title is a full-width toggle bar that stays in the same position whether folder options are expanded or collapsed. Click the same spot again to toggle back. Scrolling upward also collapses the options; scrolling down from the start of the file list restores them. The search, selection and current page stay in place.
+- Tag changes use a horizontal before/after layout with color dots and a hollow circle for no tags; hover a dot to see its tag name. Right-click any preview row, including in the expanded dialog, to **Show in Finder** or **Copy pathname** without changing which files are checked. Hover a filename for its full path and matching reason; the preview has no separate detail pane.
+- Images show thumbnails as they approach the visible area. Click a thumbnail to open a larger preview; Escape returns to the same item. macOS decodes supported image formats, with a file icon and Finder fallback for unavailable formats. Decoding is limited to two files at a time and the cache has a memory limit.
+- Reference cleanup offers **Separate folders / Same folder** above the folder cards. Finder tag workflows use independent reference and target folders. List cleanup takes a UTF-8 file or pasted filenames.
+- Cleanup moves checked files to macOS Trash. Tag syncing defaults to merging with existing target tags; replacement, fixed colors, and clearing tags are also available. Native confirmation, progress, cancellation, and a result report accompany execution.
+- Files and directory inventories are verified again before execution. A changed file, tag conflict, or failure stops the operation. The latest 20 runs are retained for the current app session and can be exported as JSON.
+
+### Languages
+
+Built-in language packs live in [`electron/locales`](electron/locales): [`en-US.json`](electron/locales/en-US.json), [`zh-CN.json`](electron/locales/zh-CN.json), and [`ja-JP.json`](electron/locales/ja-JP.json). The app initially follows the system language and remembers manual language selection. Japanese appears as **日本語** in the language menu. System locales such as `ja` resolve to the available Japanese pack.
+
+To add a language to an installed app:
+
+1. Open the language menu at the top right and choose **Open language folder**.
+2. Copy `en-US.template.json` to a locale filename such as `fr-FR.json`.
+3. Set `_meta.label` to the language's display name and translate the values. Keep message keys and parameters such as `{count}` unchanged.
+4. Choose **Reload languages**, then select the new language. Editing an existing file and reloading also updates its translations without restarting.
+
+For example, a partial `fr-FR.json` pack can start with:
+
+```json
+{
+  "_meta": { "label": "Français", "direction": "ltr" },
+  "task.tags": "Étiquettes Finder",
+  "preview.selected": "{count} fichiers sélectionnés"
+}
+```
+
+Missing messages fall back to English. Custom files named `en-US.json`, `zh-CN.json`, or `ja-JP.json` override corresponding built-in messages. Files must contain a `_meta.label`, use flat string message values, and be no larger than 2 MB; malformed files are skipped with a notification. `.template.json` files are not loaded as languages. To ship a new built-in language, add its JSON file to `electron/locales` and rebuild; no registry or UI code changes are required.
+
+### Build and validation
+
+```bash
+npm test                 # CLI / shared core; no Electron dependency installation needed
+npm run test:desktop     # Desktop planners, auto-preview, language packs and packaging
+npm run test:ui          # React interactions and real-filesystem workflow integration
+npm run test:images      # macOS native JPG/PNG thumbnail and large-preview decoding
+npm run test:filesystem  # Electron ASAR handling and physical filesystem guards
+npm run test:package     # Pack/install the npm artifact and check the CLI without Electron
+npm run test:all         # CLI, desktop, UI and npm package checks
+npm run check            # React / TypeScript
+npm run build:mac        # macOS .app in electron/dist/
+npm run dist:mac         # .app and .dmg in electron/dist/
+npm run transfer         # Portable source archive in transfer/
+```
+
+UI tests run in jsdom. They exercise React/Radix interactions and connect the app to the real desktop service and shared core using temporary files. Integration cases cover all three workflows, declined confirmations, checked-only execution, stale files, list editing, error recovery, delayed path requests across workflow switches, and a 1,004-file preview. OS dialogs, Trash and tag writes are substituted in those integration cases; layout, trackpad behavior and native dialog interaction still require a manual macOS check. The image and filesystem smoke tests run in Electron itself.
+
+Local builds target the current Mac architecture. The desktop release workflow builds both arm64 and x64 on matching Mac runners. Builds currently have no Developer ID signing or notarization; configure your own Apple credentials and the builder configuration before distributing a signed/notarized app. A packaged app runs without a separate Node.js installation or a published npm package.
+
 ## Photo and list cleanup (2.2.0)
 
 These subcommands integrate the workflows previously provided by `photome` and `deletebutme`.

@@ -1,0 +1,53 @@
+{
+  "name": "finder-selection-sync-desktop",
+  "version": "2.2.0",
+  "private": true,
+  "description": "macOS desktop app for Finder Selection Sync.",
+  "type": "module",
+  "main": "main.js",
+  "author": "Edward Xiao <edwardfxiao@gmail.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "npm run build:renderer && electron .",
+    "check": "tsc --noEmit",
+    "test": "node --test test/*.test.js",
+    "test:ui": "vitest run",
+    "test:images": "electron scripts/image-preview-smoke.cjs",
+    "test:filesystem": "electron scripts/filesystem-smoke.cjs",
+    "build:renderer": "vite build",
+    "prepare:app": "node scripts/prepare-app.mjs",
+    "build:mac": "npm run check && npm run build:renderer && npm run prepare:app && electron-builder --mac --dir --publish never",
+    "dist:mac": "npm run check && npm run build:renderer && npm run prepare:app && electron-builder --mac dmg --publish never"
+  },
+  "dependencies": {
+    "finder-selection-sync": "file:.."
+  },
+  "devDependencies": {
+    "@radix-ui/react-compose-refs": "1.1.5",
+    "@tailwindcss/vite": "4.3.4",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.2.1",
+    "class-variance-authority": "0.7.1",
+    "cn": "^0.5.2",
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0",
+    "jsdom": "26.1.0",
+    "lucide-react": "1.66.0",
+    "radix-ui": "^1.8.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "shadcn": "4.23.0",
+    "tabbable": "6.5.1",
+    "tailwindcss": "4.3.4",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
+  }
+}

@@ -3,19 +3,38 @@
   "version": "2.2.0",
   "description": "Sync Finder tags, clean files by reference extension, and keep or delete files by list.",
   "type": "module",
+  "main": "./src/index.js",
   "bin": {
     "finder-selection-sync": "bin/finder-selection-sync.js"
   },
-  "exports": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./cleanup": "./src/cleanup.js",
+    "./files": "./src/files.js"
+  },
   "files": [
     "bin",
     "src"
   ],
   "scripts": {
-    "test": "node --test",
-    "prepublishOnly": "npm test",
-    "test:coverage": "node --test --experimental-test-coverage",
-    "test:finder-trash": "node scripts/finder-trash-integration.mjs"
+    "start": "npm --prefix electron start",
+    "desktop": "npm start",
+    "setup:desktop": "npm --prefix electron ci",
+    "test": "node --test test/*.test.js",
+    "test:desktop": "npm --prefix electron test",
+    "test:ui": "npm --prefix electron run test:ui",
+    "test:images": "npm --prefix electron run test:images",
+    "test:filesystem": "npm --prefix electron run test:filesystem",
+    "test:all": "npm test && npm run test:desktop && npm run test:ui && npm run test:package",
+    "test:package": "node scripts/check-npm-package.mjs",
+    "prepublishOnly": "npm test && npm run test:package && node scripts/check-release.mjs npm",
+    "test:coverage": "node --test --experimental-test-coverage test/*.test.js",
+    "test:finder-trash": "node scripts/finder-trash-integration.mjs",
+    "check": "npm --prefix electron run check",
+    "build:renderer": "npm --prefix electron run build:renderer",
+    "build:mac": "npm --prefix electron run build:mac",
+    "dist:mac": "npm --prefix electron run dist:mac",
+    "transfer": "node scripts/create-transfer.mjs"
   },
   "repository": {
     "type": "git",

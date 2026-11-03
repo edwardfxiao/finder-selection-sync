@@ -1,5 +1,13 @@
-import fs from 'node:fs/promises';
+import nodeFs from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
+
+// User paths must refer to physical files, including .asar archives. Keep
+// Electron's virtual filesystem enabled for loading the app's own resources.
+export const fileSystem = process.versions.electron
+  ? createRequire(import.meta.url)('original-fs').promises
+  : nodeFs;
+const fs = fileSystem;
 
 export async function getFiles(directoryPath, recursive = true, depth = Infinity) {
   const result = [];

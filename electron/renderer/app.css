@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import "./styles.css";
+@custom-variant dark (&:where(.dark, .dark *));
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-card: var(--bg);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--bg);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--ink);
+  --color-primary-foreground: var(--bg);
+  --color-secondary: var(--raised);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--raised);
+  --color-muted-foreground: var(--dim);
+  --color-accent: var(--hover);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--red);
+  --color-border: var(--line);
+  --color-input: var(--line);
+  --color-ring: var(--ring);
+  --radius-sm: .375rem;
+  --radius-md: .5rem;
+  --radius-lg: .75rem;
+  --radius-xl: 1rem;
+}

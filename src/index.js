@@ -1,10 +1,9 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
-import { getFiles, directoryRoot, assertSeparateRoots, snapshotFile } from './files.js';
+import { fileSystem as fs, getFiles, directoryRoot, assertSeparateRoots, snapshotFile } from './files.js';
 import { parseCleanupArgs, runCleanup, cleanupUsage, executeCleanup } from './cleanup.js';
 export { getFiles } from './files.js';
 export { parseCleanupArgs, prepareCleanup, executeCleanup, createPhotoPlan, createListPlan, parseList } from './cleanup.js';
@@ -407,7 +406,7 @@ async function readModernFinderTags(filePath) {
   }
 }
 
-function finderColorAsTag(color) {
+export function finderColorAsTag(color) {
   const code = FINDER_TAG_COLOR_CODES[color];
   return `${FINDER_TAG_COLOR_NAMES[color]}\n${code}`;
 }

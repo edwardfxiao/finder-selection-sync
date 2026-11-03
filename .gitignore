@@ -2,3 +2,10 @@ node_modules/
 coverage/
 *.tgz
 .DS_Store
+dist/
+electron/renderer-dist/
+electron/.build/
+transfer/
+.env
+.env.*
+!.env.example
