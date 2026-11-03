@@ -83,7 +83,7 @@ for (const mode of ['orphans', 'tags', 'list'] as const) {
     expect(screen.queryByRole('checkbox', { name: /^Process / })).toBeNull();
     expect((action(mode, 0) as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => expect(f.service.active).toBeNull());
-    expect(await fs.readdir(f.tempRoot)).toEqual([]);
+    await waitFor(async () => expect(await fs.readdir(f.tempRoot)).toEqual([]));
     const cleared = JSON.parse(localStorage.getItem('finder-workbench')!);
     expect(cleared.config).toEqual({ ...saved.config, [mode]: { ...saved.config[mode], base: '', targets: [], list: '', listText: '' } });
     expect(await fs.readdir(f.target)).toEqual(['A.txt', 'B.txt', 'C.txt', 'D.txt']);
@@ -149,7 +149,7 @@ it('list source switching, text edits and clearing produce new real plans and re
   expect(await fs.readdir(f.tempRoot)).toHaveLength(1);
   fireEvent.change(editor, { target: { value: ' \n ' } });
   await waitFor(() => expect(f.service.active).toBeNull());
-  expect(await fs.readdir(f.tempRoot)).toEqual([]);
+  await waitFor(async () => expect(await fs.readdir(f.tempRoot)).toEqual([]));
   expect((action('list', 0) as HTMLButtonElement).disabled).toBe(true);
   await user.click(screen.getByRole('tab', { name: 'List file' }));
   await ready(); expect(candidateNames(f.service)).toEqual(['C.txt', 'D.txt']);
