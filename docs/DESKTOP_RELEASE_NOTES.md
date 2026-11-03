@@ -1,4 +1,4 @@
-## Changes in 2.2.3
+## Changes in 2.2.4
 
 - Assign multiple Finder color tags, with saved single-color preferences migrated automatically.
 - Require at least one selected tag before previewing tag assignment.

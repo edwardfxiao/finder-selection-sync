@@ -20,7 +20,8 @@ function Preview() {
   const [selected, setSelected] = useState(new Set(plan.rows.filter(row => row.candidate).map(row => row.id)));
   return <I18nContext.Provider value={language}><FileResults plan={plan} selected={selected} setSelected={setSelected} reveal={() => {}} copyPath={() => {}} /></I18nContext.Provider>;
 }
-it('expanded preview preserves search, pagination and selection when returning to the workspace', async () => {
+// Real Radix focus traversal over 205 rows can exceed 5s on shared CI runners.
+it('expanded preview preserves search, pagination and selection when returning to the workspace', { timeout: 20000 }, async () => {
   const user = userEvent.setup();
   render(<Preview />);
   const open = screen.getByRole('button', { name: 'Expand preview' });
@@ -46,7 +47,7 @@ it('expanded preview preserves search, pagination and selection when returning t
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(screen.getByRole('checkbox', { name: 'Process photo-100.jpg' })).toBeTruthy();
 });
-it('the changes-only filter remains shared and protected files cannot be checked in the dialog', async () => {
+it('the changes-only filter remains shared and protected files cannot be checked in the dialog', { timeout: 20000 }, async () => {
   const user = userEvent.setup();
   render(<Preview />);
   await user.click(screen.getByRole('button', { name: 'Expand preview' }));
