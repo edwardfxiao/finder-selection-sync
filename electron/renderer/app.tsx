@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FolderSync, Tags as TagsIcon, ListChecks, History, Languages, RefreshCw, FolderOpen, ScanLine, Check, LoaderCircle, ChevronRight, ArrowUpRight } from 'lucide-react';
+import { FolderSync, Tags as TagsIcon, ListChecks, History, Languages, RefreshCw, FolderOpen, ScanLine, Check, LoaderCircle, ChevronRight, ArrowUpRight, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
@@ -35,6 +35,7 @@ export default function App() {
   configRef.current = config; modeRef.current = mode;
   const [catalog, setCatalog] = useState(initialCatalog), [version, setVersion] = useState('');
   const [loaded, setLoaded] = useState(false), [languageBusy, setLanguageBusy] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
   const [previewState, setPreviewState] = useState<PreviewState>({ plan: null, error: null, busy: false, pending: false });
   const [selected, setSelected] = useState(new Set<string>()), [run, setRun] = useState<Run | null>(null), [history, setHistory] = useState<Run[]>([]);
   const [job, setJob] = useState<'execute' | null>(null), [stopping, setStopping] = useState(false);
@@ -50,7 +51,7 @@ export default function App() {
   }));
   const i18n = useMemo(() => makeTranslator(catalog), [catalog]);
   const { t, text, locale } = i18n;
-  const locked = !!job || !loaded;
+  const locked = !!job || !loaded || historyBusy;
   const busy = previewState.busy || !!job;
   const plan = previewState.plan;
   const previewLoading = !job && (previewState.pending || previewState.busy);
@@ -177,7 +178,19 @@ export default function App() {
     if (locked || previewState.busy) return;
     workspaceRevision.current++;
     controller.update(null); setRun(null); setMode('history'); modeRef.current = 'history';
+    setHistoryBusy(true);
     try { setHistory(await api.history()); } catch (error) { report(error); }
+    finally { setHistoryBusy(false); }
+  }
+  async function clearHistory() {
+    if (locked || !history.length) return;
+    setHistoryBusy(true);
+    try {
+      setHistory(await api.clearHistory()); setRun(null);
+      setPreviewState(previous => ({ ...previous, error: null }));
+      notify(t('history.cleared'));
+    } catch (error) { report(error); }
+    finally { setHistoryBusy(false); }
   }
   function stop() { setStopping(true); if (job) api.cancel().catch(report); else controller.stop(); }
 
@@ -194,7 +207,7 @@ export default function App() {
     </header>
     <div className="app-shell"><aside className="sidebar"><div className="nav-caption">{t('nav.workflows')}</div><nav aria-label={t('nav.workflows')}>{(Object.keys(modeIcons) as Mode[]).map(key => { const Icon = modeIcons[key]; return <Button key={key} variant="ghost" className={`nav-button ${mode === key ? 'active' : ''}`} disabled={locked} aria-current={mode === key ? 'page' : undefined} onClick={() => switchMode(key)}><Icon strokeWidth={1.65} /><span>{t(`task.${key}`)}</span></Button>; })}</nav><div className="nav-divider" /><Button variant="ghost" className={`nav-button ${mode === 'history' ? 'active' : ''}`} disabled={locked || previewState.busy} onClick={showHistory}><History strokeWidth={1.65} /><span>{t('nav.history')}</span>{history.length > 0 && <span className="nav-count">{history.length}</span>}</Button><div className="sidebar-bottom"><div className="sidebar-version"><span className="connection-dot" />{t('nav.version', { version })}</div></div></aside>
       <main className="workspace" aria-label={t('app.title')}>
-        {mode === 'history' ? run ? <Activity key={run.id} run={run} exportRun={() => exportRun(run)} back={() => setRun(null)} /> : <><header className="heading"><div><h1>{t('history.title')}</h1><p>{t('history.description')}</p></div></header><ErrorNotice error={previewState.error} />{history.length ? <div className="history-list">{history.map(item => <button key={item.id} className="history-item" onClick={() => setRun(item)}><div><strong>{t(`task.${item.mode}`)}</strong><small>{new Date(item.startedAt).toLocaleString(locale)} · {t('history.count', { count: item.records.length })}</small></div><span className={`status ${item.error ? 'failed' : item.cancelled ? 'pending' : 'completed'}`}>{t('history.summary', { count: item.completed })}</span></button>)}</div> : <div className="empty"><History /><strong>{t('history.empty')}</strong><p>{t('history.emptyHint')}</p></div>}</>
+        {mode === 'history' ? run ? <Activity key={run.id} run={run} exportRun={() => exportRun(run)} back={() => setRun(null)} /> : <><header className="heading"><div><h1>{t('history.title')}</h1><p>{t('history.description')}</p></div><Button variant="outline" size="sm" disabled={locked || !history.length} aria-busy={historyBusy} title={t('history.clearHint')} onClick={clearHistory}><Trash2 />{t('history.clearAll')}</Button></header><ErrorNotice error={previewState.error} />{history.length ? <div className="history-list">{history.map(item => <button key={item.id} className="history-item" onClick={() => setRun(item)}><div><strong>{t(`task.${item.mode}`)}</strong><small>{new Date(item.startedAt).toLocaleString(locale)} · {t('history.count', { count: item.records.length })}</small></div><span className={`status ${item.error ? 'failed' : item.cancelled ? 'pending' : 'completed'}`}>{t('history.summary', { count: item.completed })}</span></button>)}</div> : <div className="empty"><History /><strong>{t('history.empty')}</strong><p>{t('history.emptyHint')}</p></div>}</>
           : run ? <Activity key={run.id} run={run} exportRun={() => exportRun(run)} refresh={refresh} /> : <>
             <WorkflowHeader ref={previewFocus.toggleRef} config={c!} collapsed={previewFocus.focused} disabled={locked} controls={previewFocus.settingsId} toggle={() => previewFocus.focused ? previewFocus.restore() : previewFocus.minimize()} reset={resetSelection} />
             <div className="workspace-settings" id={previewFocus.settingsId} ref={previewFocus.settingsRef} data-collapsed={previewFocus.focused} inert={previewFocus.focused} aria-hidden={previewFocus.focused || undefined}><div className="workspace-settings-content">

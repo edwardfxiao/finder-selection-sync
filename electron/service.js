@@ -121,6 +121,11 @@ export class DesktopService {
     try { this.onProgress({ phase, detail, completed, total }); } catch { /* disconnected UI */ }
   }
   cancel() { this.cancelled = true; }
+  clearHistory() {
+    if (this.busy) throw appError('error.busy');
+    this.history = [];
+    return this.history;
+  }
   async disposePlan(plan) {
     if (plan?.tempDirectory) await fs.rm(plan.tempDirectory, { recursive: true, force: true });
   }

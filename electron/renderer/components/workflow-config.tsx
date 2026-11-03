@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type Ref } from 'react';
+import { useId, useRef, useState, type ReactNode, type Ref } from 'react';
 import { ArrowRight, FileText, Folder, FolderOpen, ListChecks, Plus, RefreshCw, RotateCcw, X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,9 +14,10 @@ import { usePopupKeyboard } from '@/lib/popup-keyboard';
 import type { Config, PathKind } from '@/types';
 
 type ChoosePath = (kind: PathKind, replace?: string) => void | Promise<void>;
+const finderColorCodes: Record<string, number> = { gray: 1, green: 2, purple: 3, blue: 4, yellow: 5, red: 6, orange: 7 };
 
 export function Choice({ label, value, choices, disabled, onChange }: {
-  label: string; value: string; choices: [string, string][]; disabled?: boolean; onChange: (value: string) => void;
+  label: string; value: string; choices: [string, ReactNode][]; disabled?: boolean; onChange: (value: string) => void;
 }) {
   const id = useId();
   return <div className="field"><label htmlFor={id}>{label}</label><Select value={value} onValueChange={onChange} disabled={disabled}>
@@ -102,7 +103,7 @@ export function WorkflowConfig({ config: c, disabled, update, choose, dropped, r
   const [advanced, setAdvanced] = useState(false);
   const listEditor = useRef<HTMLTextAreaElement>(null);
   const mode = c.mode;
-  const select = (key: keyof Config, label: string, pairs: [string, string][]) => <Choice label={t(label)} value={String(c[key])} choices={pairs.map(([value, key]) => [value, t(key)])} disabled={disabled} onChange={value => update({ [key]: value })} />;
+  const select = (key: keyof Config, label: string, pairs: [string, string][]) => <Choice label={t(label)} value={String(c[key])} choices={pairs.map(([value, message]) => [value, key === 'color' ? <span className="tag"><span className={`tag-dot color-${finderColorCodes[value]}`} aria-hidden="true" />{t(message)}</span> : t(message)])} disabled={disabled} onChange={value => update({ [key]: value })} />;
   const check = (key: keyof Config, label: string) => <Check label={t(label)} checked={Boolean(c[key])} disabled={disabled} onChange={value => update({ [key]: value })} />;
   const field = (key: keyof Config, label: string, placeholder = '', wide = false) => <label className="field">{t(label)}<Input className={`${wide ? 'w-36' : 'w-20'} h-8 text-xs`} value={String(c[key])} placeholder={placeholder} disabled={disabled} onChange={event => update({ [key]: event.target.value }, 400)} /></label>;
   const source = mode === 'list' && c.listSource === 'text'

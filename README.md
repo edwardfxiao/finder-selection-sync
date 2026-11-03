@@ -29,7 +29,7 @@ Electron depends on the root package through `file:..`; changes to `src/` are us
 
 The npm tarball contains only the CLI/core and package documentation. Electron, React, renderer code and installers are excluded. `npm-v<version>` tags publish the root package to npm; `desktop-v<version>` tags build Apple Silicon (arm64) DMGs for GitHub Releases. Ordinary commits only run CI. The desktop package is `private: true`.
 
-**Moving to another Mac / continuing with another account:** see [Development, transfer and release guide](docs/DEVELOPMENT.md). Run `npm run transfer` to create a source archive containing current work and Git history, without dependencies, build outputs, account configuration or a configured remote. The npm package name is **`finder-selection-sync`**. When transferring to a different account, review the GitHub repository URLs and author metadata before publishing.
+**Moving to another Mac / continuing with another account:** see [Development, transfer and release guide](docs/DEVELOPMENT.md). Run `npm run transfer` to create a source archive containing current work without Git history, dependencies, build outputs or local account configuration. Use `npm run transfer -- --with-history` only when you also intend to include historical authors and committed contents. The npm package name is **`finder-selection-sync`**. When transferring to a different account, review the GitHub repository URLs and author metadata before publishing.
 
 ## Desktop app
 

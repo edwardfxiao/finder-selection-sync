@@ -173,6 +173,10 @@ async function start() {
     },
   })));
   handle('history', () => service.history);
+  handle('clear-history', () => {
+    if (running) throw appError('error.busy');
+    return service.clearHistory();
+  });
   handle('image', ({ file, kind } = {}) => images.read(file, kind));
   handle('copy-path', file => clipboard.writeText(knownPath(file)));
   handle('reveal', async payload => {

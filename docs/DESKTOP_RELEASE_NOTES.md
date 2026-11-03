@@ -1,3 +1,10 @@
+## Changes in 2.2.2
+
+- Clear session activity records without changing files or exported reports.
+- Show Finder color dots in the color selector and selected value.
+- Export source without Git history by default, excluding local credentials and filesystem metadata; history requires an explicit option.
+- Expand activity and color-selection regression coverage and preserve asynchronous cleanup checks.
+
 ## Desktop app
 
 Finder Selection Sync now includes a macOS desktop app alongside the npm CLI. This release bundles the shared matching and cleanup core; a separate Node.js installation is not required.

@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '@/app';
 import { defaults } from '@/lib/config';
@@ -51,7 +51,7 @@ async function setup(mode: Mode, patch: Partial<Config> = {}) {
     preview: vi.fn(async (value: Config) => { try { return await service.preview(value) as Plan; } catch (error) { throw describeError(error); } }),
     discard: vi.fn(async () => { await service.discard(); }), cancel: vi.fn(async () => { service.cancel(); }),
     execute: vi.fn(async (id: string, ids: string[]) => await service.execute(id, ids, { confirm }) as Run | { declined: true }),
-    history: vi.fn(async () => service.history as Run[]),
+    history: vi.fn(async () => service.history as Run[]), clearHistory: vi.fn(async () => service.clearHistory() as Run[]),
     reveal: vi.fn().mockResolvedValue(undefined), copyPath: vi.fn().mockResolvedValue(undefined), exportResult: vi.fn().mockResolvedValue(true),
     image: vi.fn().mockRejectedValue(new Error('Text fixtures have no images')),
     onProgress: vi.fn((callback: (value: ProgressInfo) => void) => { progress = callback; return () => { progress = undefined; }; }),
@@ -122,6 +122,28 @@ for (const mode of ['orphans', 'tags', 'list'] as const) {
     await user.click(screen.getByRole('button', { name: 'Export report' }));
     expect(f.api.exportResult).toHaveBeenCalledExactlyOnceWith(f.service.history[0].id);
     expect(screen.queryByRole('button', { name: /Load example/i })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /Activity/ }));
+    const clear = screen.getByRole('button', { name: 'Clear all' });
+    // A rejected clear must keep the records available to view and export.
+    f.api.clearHistory.mockRejectedValueOnce({ key: 'error.busy' });
+    await user.click(clear);
+    await waitFor(() => expect((clear as HTMLButtonElement).disabled).toBe(false));
+    expect(f.service.history).toHaveLength(1);
+    expect(screen.queryByText('No activity yet')).toBeNull();
+    await user.click(clear);
+    expect(await screen.findByText('No activity yet')).toBeTruthy();
+    expect(f.service.history).toEqual([]);
+    expect((clear as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Activity' }).querySelector('.nav-count')).toBeNull();
+    // Returning to Activity reads the cleared service state, not just a UI reset.
+    await user.click(screen.getByRole('button', { name: mode === 'tags' ? 'Finder tags' : mode === 'list' ? 'Organize by list' : 'Clean by reference' }));
+    await screen.findByRole('checkbox', { name: 'Process A.txt' });
+    await user.click(screen.getByRole('button', { name: 'Activity' }));
+    expect(await screen.findByText('No activity yet')).toBeTruthy();
+    expect(f.trashFile).toHaveBeenCalledTimes(mode === 'tags' ? 0 : 1);
+    expect(f.writeTags).toHaveBeenCalledTimes(mode === 'tags' ? 1 : 0);
+    expect(await fs.readFile(path.join(mode === 'tags' ? f.target : f.trash, processed), 'utf8')).toBe(`fixture ${processed}`);
   });
 
   it(`${mode}: a file added while confirming stops execution and presents the error in Activity`, async () => {
@@ -136,6 +158,23 @@ for (const mode of ['orphans', 'tags', 'list'] as const) {
     expect(await fs.readdir(f.target)).toEqual(['A.txt', 'B.txt', 'C.txt', 'D.txt', 'new.txt']);
   });
 }
+
+it('color choices display Finder color dots in the menu and selected value and update the real preview', async () => {
+  const f = await setup('tags', { tagAction: 'color' }), user = userEvent.setup();
+  render(<App />); await ready();
+  const trigger = screen.getByRole('combobox', { name: 'Color' });
+  expect(trigger.querySelector('.tag-dot.color-2')).toBeTruthy();
+  await user.click(trigger);
+  const list = await screen.findByRole('listbox');
+  const names = ['Gray', 'Green', 'Purple', 'Blue', 'Yellow', 'Red', 'Orange'];
+  for (const [index, name] of names.entries()) expect(within(list).getByRole('option', { name }).querySelector(`.tag-dot.color-${index + 1}`)).toBeTruthy();
+  await user.click(within(list).getByRole('option', { name: 'Red' }));
+  await ready();
+  expect(trigger.querySelector('.tag-dot.color-6')).toBeTruthy();
+  expect(trigger.textContent).toBe('Red');
+  expect(f.service.active!.rows.find((row: { name: string }) => row.name === 'A.txt').nextTags).toEqual(['Red\n6']);
+  expect(f.writeTags).not.toHaveBeenCalled();
+});
 
 it('list source switching, text edits and clearing produce new real plans and remove temporary list files', async () => {
   const f = await setup('list'), user = userEvent.setup();

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('finder', {
   execute: (id, selectedIds) => call('execute', { id, selectedIds }),
   cancel: () => call('cancel'),
   history: () => call('history'),
+  clearHistory: () => call('clear-history'),
   image: (file, kind) => call('image', { file, kind }),
   reveal: (file, kind) => call('reveal', kind ? { file, kind } : file),
   copyPath: file => call('copy-path', file),

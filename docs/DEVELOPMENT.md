@@ -12,9 +12,9 @@ From the repository root, run:
 npm run transfer
 ```
 
-Transfer both the generated `.tar.gz` and its `.sha256` file from `transfer/` to the other Mac. The archive includes current uncommitted changes, new source files, tests, language packs, release workflows and existing Git history. Unlike `git archive`, it does not require committing new work before transferring it.
+Transfer both the generated `.tar.gz` and its `.sha256` file from `transfer/` to the other Mac. The archive includes current uncommitted changes, new source files, tests, language packs, release workflows, without Git history by default. Unlike `git archive`, it does not require committing new work before transferring it.
 
-Dependencies, build outputs, installers, machine-specific account settings, Git hooks and the original remote configuration are excluded. Historical commit authors remain intact; future commits use the identity configured on the destination Mac. Application preferences, selected folder paths and photo files are not part of the source archive.
+Dependencies, build outputs, installers, machine-specific account settings, Git hooks and the original remote configuration are excluded. Use `npm run transfer -- --with-history` to explicitly include historical commit authors and committed contents. Future commits use the identity configured on the destination Mac. Source files may themselves contain personal information; review them before sharing. Application preferences, selected folder paths and photo files are not part of the source archive.
 
 On the destination Mac, verify the archive with `shasum -a 256 -c <archive-name>.sha256`, extract it, and open the resulting `finder-selection-sync/` directory.
 
@@ -53,7 +53,7 @@ Preserve the current UI behavior when making structural changes: automatic previ
 
 ## 3. Use the destination computer's GitHub account
 
-The transfer archive has no configured remote. Sign in to GitHub on the destination Mac. With GitHub CLI, use `gh auth login` and confirm the active account with `gh auth status`.
+The transfer archive has no configured remote. For a default source-only archive, run `git init -b main` before configuring the identity and remote below. Sign in to GitHub on the destination Mac. With GitHub CLI, use `gh auth login` and confirm the active account with `gh auth status`.
 
 Create an empty repository on GitHub, then configure this checkout's author identity and remote. Replace these example values manually:
 

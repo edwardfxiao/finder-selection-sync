@@ -56,6 +56,21 @@ test('desktop: a cancelled confirmation keeps the valid preview and does not mut
   assert.equal(f.service.active.id, plan.id);
   assert.deepEqual(f.calls, []);
 });
+test('desktop: clearing history preserves files and the current preview, and refuses to run during execution', async t => {
+  const f = await fixture(t, { 'base/A.NEF': 'raw', 'target/A.JPG': 'keep', 'target/B.JPG': 'remove' });
+  const plan = await f.service.preview({ ...f, mode: 'orphans' });
+  await f.service.execute(plan.id, selected(plan), { confirm: async () => {
+    assert.throws(() => f.service.clearHistory(), /error.busy/);
+    return true;
+  } });
+  const next = await f.service.preview({ ...f, mode: 'orphans' });
+  assert.equal(f.service.history.length, 1);
+  assert.deepEqual(f.service.clearHistory(), []);
+  assert.equal(f.service.active.id, next.id);
+  assert.deepEqual(await fs.readdir(f.targets[0]), ['A.JPG']);
+  assert.equal(await fs.readFile(path.join(f.root, 'trash', 'B.JPG'), 'utf8'), 'remove');
+  assert.equal(await fs.readFile(path.join(f.base, 'A.NEF'), 'utf8'), 'raw');
+});
 for (const changed of ['candidate', 'reference', 'inventory']) {
   test(`desktop: ${changed} changes while confirming invalidate the whole plan`, async t => {
     const f = await fixture(t, { 'base/A.NEF':'raw', 'target/B.JPG':'remove' });

@@ -80,8 +80,12 @@ app.whenReady().then(async () => {
     console.error(error);
     exitCode = 1;
   } finally {
-    await service?.discard();
-    await fs.rm(root, { recursive: true, force: true });
-    app.exit(exitCode);
+    try {
+      await service?.discard();
+      await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch (error) {
+      console.error(error);
+      exitCode = 1;
+    } finally { app.exit(exitCode); }
   }
 });

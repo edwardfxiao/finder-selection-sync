@@ -47,6 +47,7 @@ export interface FinderAPI {
   cancel(): Promise<void>;
   execute(id: string, selectedIds: string[]): Promise<Run | { declined: true }>;
   history(): Promise<Run[]>;
+  clearHistory(): Promise<Run[]>;
   image(file: string, kind: 'thumbnail' | 'preview'): Promise<ImagePreview>;
   reveal(file: string, kind?: PathKind): Promise<void>;
   copyPath(file: string): Promise<void>;

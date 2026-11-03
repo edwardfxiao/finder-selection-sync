@@ -15,7 +15,7 @@ function setup(mode: Mode = 'tags', targets = ['/one/photos', '/two/photos']) {
   localStorage.setItem('finder-workbench', JSON.stringify({ mode, config }));
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   const api = {
-    version: vi.fn().mockResolvedValue('2.2.0'), locales: vi.fn().mockResolvedValue(catalog), history: vi.fn().mockResolvedValue([]),
+    version: vi.fn().mockResolvedValue('2.2.0'), locales: vi.fn().mockResolvedValue(catalog), history: vi.fn().mockResolvedValue([]), clearHistory: vi.fn().mockResolvedValue([]),
     setLocale: vi.fn().mockResolvedValue(catalog), reloadLocales: vi.fn().mockResolvedValue(catalog), openLocaleFolder: vi.fn().mockResolvedValue(undefined),
     choose: vi.fn<FinderAPI['choose']>().mockResolvedValue([]), dropped: vi.fn().mockResolvedValue([]),
     preview: vi.fn<FinderAPI['preview']>().mockImplementation(async config => ({
