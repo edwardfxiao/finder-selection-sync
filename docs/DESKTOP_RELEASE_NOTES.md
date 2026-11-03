@@ -12,9 +12,10 @@ Finder Selection Sync now includes a macOS desktop app alongside the npm CLI. Th
 ## Downloads
 
 - `arm64.dmg`: Apple Silicon Macs (M-series).
-- `x64.dmg`: Intel Macs.
 
-Open the appropriate DMG and install the app in Applications.
+This desktop release supports Apple Silicon only.
+
+Open the DMG and install the app in Applications.
 
 ## Signing status
 

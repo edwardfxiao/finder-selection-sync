@@ -115,7 +115,7 @@ Build locally with:
 npm run dist:mac
 ```
 
-Artifacts are written to `electron/dist/`. Local builds target the current Mac architecture. The release workflow tests and builds arm64 and x64 DMGs on matching Apple Silicon and Intel runners, then creates a Release in the current repository using `GITHUB_TOKEN` and attaches both installers. Normal branch pushes run CI only. Versions with a prerelease suffix are marked as prereleases. No npm publisher setup is needed to release the desktop app.
+Artifacts are written to `electron/dist/`. Local builds target the current Mac architecture. The release workflow tests and builds an arm64 DMG on an Apple Silicon runner, then creates a Release in the current repository using `GITHUB_TOKEN` and attaches the installer. Normal branch pushes run CI only. Versions with a prerelease suffix are marked as prereleases. No npm publisher setup is needed to release the desktop app.
 
 Example release (`2.2.1` must match the Electron package version):
 

@@ -13,15 +13,7 @@ concurrency:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -38,11 +30,11 @@ jobs:
       - run: npm run test:ui
       - run: npm run test:images
       - run: npm run test:filesystem
-      - run: npm --prefix electron run dist:mac -- --${{ matrix.arch }}
+      - run: npm --prefix electron run dist:mac -- --arm64
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.arch }}
-          path: electron/dist/*.dmg
+          name: desktop-arm64
+          path: electron/dist/*-arm64.dmg
           if-no-files-found: error
 
   release:

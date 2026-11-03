@@ -27,7 +27,7 @@ scripts/                 CLI package validation and source transfer
 
 Electron depends on the root package through `file:..`; changes to `src/` are used directly during development. Packaging stages a self-contained copy of that same core under the app's `node_modules`, preserving the core's own version metadata. Do not edit generated files in `electron/.build/`.
 
-The npm tarball contains only the CLI/core and package documentation. Electron, React, renderer code and installers are excluded. `npm-v<version>` tags publish the root package to npm; `desktop-v<version>` tags build Apple Silicon and Intel DMGs for GitHub Releases. Ordinary commits only run CI. The desktop package is `private: true`.
+The npm tarball contains only the CLI/core and package documentation. Electron, React, renderer code and installers are excluded. `npm-v<version>` tags publish the root package to npm; `desktop-v<version>` tags build Apple Silicon (arm64) DMGs for GitHub Releases. Ordinary commits only run CI. The desktop package is `private: true`.
 
 **Moving to another Mac / continuing with another account:** see [Development, transfer and release guide](docs/DEVELOPMENT.md). Run `npm run transfer` to create a source archive containing current work and Git history, without dependencies, build outputs, account configuration or a configured remote. The npm package name is **`finder-selection-sync`**. When transferring to a different account, review the GitHub repository URLs and author metadata before publishing.
 
@@ -95,7 +95,7 @@ npm run transfer         # Portable source archive in transfer/
 
 UI tests run in jsdom. They exercise React/Radix interactions and connect the app to the real desktop service and shared core using temporary files. Integration cases cover all three workflows, declined confirmations, checked-only execution, stale files, list editing, error recovery, delayed path requests across workflow switches, and a 1,004-file preview. OS dialogs, Trash and tag writes are substituted in those integration cases; layout, trackpad behavior and native dialog interaction still require a manual macOS check. The image and filesystem smoke tests run in Electron itself.
 
-Local builds target the current Mac architecture. The desktop release workflow builds both arm64 and x64 on matching Mac runners. Builds currently have no Developer ID signing or notarization; configure your own Apple credentials and the builder configuration before distributing a signed/notarized app. A packaged app runs without a separate Node.js installation or a published npm package.
+Local builds target the current Mac architecture. The desktop release workflow builds only arm64 on an Apple Silicon runner. Builds currently have no Developer ID signing or notarization; configure your own Apple credentials and the builder configuration before distributing a signed/notarized app. A packaged app runs without a separate Node.js installation or a published npm package.
 
 ## Photo and list cleanup (2.2.0)
 
