@@ -51,6 +51,38 @@ During development, `electron/node_modules/finder-selection-sync` links to the r
 
 Preserve the current UI behavior when making structural changes: automatic previews with skeleton loading; a stationary title toggle for folder options; fully clickable path regions with clear/reveal controls in all three modes; expanded preview, image thumbnails/viewer and row context menus; horizontal tag dots with a hollow circle for untagged files.
 
+### Checks and local builds
+
+Run commands from the repository root:
+
+```bash
+npm test                 # CLI and shared core; no desktop dependencies needed
+npm run test:coverage    # CLI and shared-core coverage
+npm run test:desktop     # Desktop service, auto-preview, languages and packaging
+npm run test:ui          # React interactions and filesystem workflow integration
+npm run test:images      # Native macOS thumbnail and large-image decoding
+npm run test:filesystem  # Electron ASAR handling and physical filesystem guards
+npm run test:package     # Pack/install the CLI and check it without Electron
+npm run test:all         # CLI, desktop, UI and npm package checks
+npm run check            # React / TypeScript
+npm run build:mac        # Local .app in electron/dist/
+npm run dist:mac         # Local .app and .dmg in electron/dist/
+```
+
+UI tests run in jsdom and connect React to the desktop service and shared core through temporary files. They cover all three workflows, declined confirmations, checked-only execution, stale files, list editing, error recovery, delayed path requests across workflow switches, and a 1,004-file preview. OS dialogs, Trash and tag writes are substituted in those integration cases. Layout, trackpad behavior and native dialogs still require a manual macOS check. The image and filesystem smoke tests run in Electron.
+
+The default CLI tests do not alter the user's Trash. To test real Finder deletion explicitly:
+
+```bash
+npm run test:finder-trash
+```
+
+This macOS-only test may request Automation permission. It creates isolated fixtures, verifies the exact Trash paths returned by Finder, then restores and removes only those fixtures. It never enumerates or empties Trash. It covers filename collisions, Unicode and quotes, list/reference preservation, and stopping when a new matching reference appears. If recovery fails, retain the printed fixture directory for investigation. This test does not run under `npm test` or during publishing.
+
+### Built-in translations
+
+Add a locale JSON file to `electron/locales/` and rebuild; no registry or UI changes are required. Each pack needs `_meta.label` and flat string message values. Preserve placeholders such as `{count}`. Missing messages fall back to English, and custom packs in the app's language folder override built-in messages. Files must be no larger than 2 MB; malformed packs are skipped with a notification. Files ending in `.template.json` are not loaded as languages.
+
 ## 3. Use the destination computer's GitHub account
 
 The transfer archive has no configured remote. For a default source-only archive, run `git init -b main` before configuring the identity and remote below. Sign in to GitHub on the destination Mac. With GitHub CLI, use `gh auth login` and confirm the active account with `gh auth status`.
@@ -69,7 +101,7 @@ git push -u origin main
 
 If you copied the original project directory instead of using the transfer archive, check `git remote -v` first. To replace an existing remote, use `git remote set-url origin <your-repository-url>`.
 
-Before publishing, update the root `package.json` fields `repository`, `homepage`, `bugs` and `author`, plus `author` in `electron/package.json`. The `example` values in the commands above are placeholders; the package metadata in this checkout is configured for Edward Xiao. Keep the public npm package name and CLI command **`finder-selection-sync`**. The npm release check rejects the placeholder repository and verifies that the package repository matches the actual GitHub Actions repository.
+Before publishing, update the root `package.json` fields `repository`, `homepage`, `bugs` and `author`, plus `author` in `electron/package.json`. The `example` values in the commands above are placeholders; the package metadata in this checkout is configured for Example User. Keep the public npm package name and CLI command **`finder-selection-sync`**. The npm release check rejects the placeholder repository and verifies that the package repository matches the actual GitHub Actions repository.
 
 The desktop dependency `finder-selection-sync: file:..` is a local reference to this repository's core, not a registry download. The CLI executable name is controlled separately by the root `bin` field.
 
