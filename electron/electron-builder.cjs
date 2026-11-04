@@ -8,6 +8,7 @@ module.exports = {
   forceCodeSigning: true,
   artifactName: 'Finder-Selection-Sync-${version}-${arch}.${ext}',
   mac: {
+    icon: 'build/icon.icns',
     category: 'public.app-category.utilities',
     // Ad-hoc signing seals the rebuilt bundle without a Developer ID certificate.
     identity: '-',

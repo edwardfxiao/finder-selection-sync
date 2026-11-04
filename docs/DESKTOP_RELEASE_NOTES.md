@@ -1,3 +1,7 @@
+## Changes in 2.2.5
+
+- Replace the default Electron icon with the new Finder Selection Sync application icon.
+
 ## Changes in 2.2.4
 
 - Assign multiple Finder color tags, with saved single-color preferences migrated automatically.

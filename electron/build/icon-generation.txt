@@ -1,0 +1,19 @@
+Finder Selection Sync icon
+
+Generated with the built-in image_gen tool from the user-provided layered folder reference.
+The white synchronization symbol was changed to circular arcs. The four colored folder layers and seven Finder tag dots follow the reference.
+PNG resizing and ICNS packaging use macOS sips and iconutil.
+
+Files:
+- icon.png: 1024 x 1024 PNG with transparency
+- icon.icns: macOS application icon with multiple resolutions up to 1024 x 1024
+
+Final prompt:
+Use case: precise-object-edit / logo-brand.
+Input image: the supplied small icon is the exact visual design reference.
+Create a clean high-resolution production macOS application icon faithfully matching this reference. Preserve its attractive layered colorful folders, proportions, rounded geometry, saturated blue front folder, emerald green folder behind it, warm yellow/orange folder and coral red back folder, soft dimensional depth, highlights, porcelain rounded-square base, and the white rounded horizontal pill with seven Finder tag dots across the bottom of the blue folder (red, orange, yellow, green, blue, purple, gray). Match this specific reference closely; do not invent a different logo or change the color arrangement.
+
+The ONE requested design correction: replace the squashed elliptical sync arrows with a visually PERFECTLY CIRCULAR white sync symbol. It must be a true front-facing circle, horizontal and vertical diameter exactly equal, a 1:1 circle, no perspective or foreshortening. Construct the symbol from two balanced circular arcs sharing precisely the same center and constant radius, with equal thick white strokes and two matching arrowheads tangent to that circle. Do not flatten or widen the ring. The white arrow symbol's overall silhouette must read as a round circle, not an oval, not a diagonal loop or infinity sign. Center it on the blue folder above the colored tag pill. Keep its circular shape even though the folder is wider than it is tall. Use a restrained shadow so the circle stays optically precise.
+
+Output a square 1024 x 1024 standalone app icon, not a mockup. Reconstruct the complete rounded-square base instead of retaining the cropped top and bottom of the reference photo. Keep the whole base centered with about 8 percent equal clear padding on all four sides. Outside the base must be genuine transparent alpha with clean antialiased edges, no stray pixels and no painted checkerboard. Preserve the polished, softly dimensional macOS look of the reference, with internal shadows and crisp edges, no excessive external shadow. No text, no additional symbols, no watermark.
+
