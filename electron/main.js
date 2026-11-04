@@ -93,6 +93,11 @@ function knownPath(file) {
 }
 
 async function start() {
+  // Development uses the stock Electron bundle; packaged apps have an embedded icon.
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    const icon = nativeImage.createFromPath(path.join(here, 'build', 'icon.png'));
+    if (!icon.isEmpty()) app.dock.setIcon(icon);
+  }
   localeDirectory = path.join(app.getPath('userData'), 'locales');
   preferencePath = path.join(app.getPath('userData'), 'preferences.json');
   catalog = await loadLocales(path.join(here, 'locales'), localeDirectory);
