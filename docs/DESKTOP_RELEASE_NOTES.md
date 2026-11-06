@@ -1,4 +1,4 @@
-## Changes in 2.3.0
+## Changes in 2.3.1
 
 - Filter files by name, extension, size and modification date, then tag selected results.
 - Compare filenames across folders and tag checked files on either side.

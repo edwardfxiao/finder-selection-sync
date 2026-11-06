@@ -10,5 +10,7 @@ export default defineConfig({
     include: ['renderer/tests/*.test.tsx'],
     setupFiles: ['renderer/tests/setup.ts'],
     restoreMocks: true,
+    // Full user workflows include real focus traversal, debounce and filesystem IO.
+    testTimeout: 20000,
   },
 });
