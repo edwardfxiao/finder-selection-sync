@@ -1,3 +1,12 @@
+## Changes in 2.3.0
+
+- Filter files by name, extension, size and modification date, then tag selected results.
+- Compare filenames across folders and tag checked files on either side.
+- Apply tags to selected list entries while preserving cleanup rules.
+- Add light/dark themes, date picking, range selection and selection shortcuts.
+- Improve preview cancellation, caching, reset behavior and operation feedback.
+- Expand filesystem, state, interaction and selection regression coverage.
+
 ## Changes in 2.2.5
 
 - Replace the default Electron icon with the new Finder Selection Sync application icon.

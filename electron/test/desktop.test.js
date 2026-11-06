@@ -267,9 +267,9 @@ test('auto preview: debounces text, runs one scan at a time, and suppresses stal
   h.controller.update(config, 400);
   h.controller.update({...config,referenceExt:'JPG'}, 400);
   assert.equal(h.timers.size, 1);
-  h.flush(); assert.equal(h.requests.length, 1);
+  h.flush(); await tick(); assert.equal(h.requests.length, 1);
   assert.equal(h.requests[0].config.referenceExt, 'JPG');
-  h.controller.update({...config,referenceExt:'CR3'}, 0); h.flush();
+  h.controller.update({...config,referenceExt:'CR3'}, 0); h.flush(); await tick();
   assert.equal(h.requests.length, 1);
   h.requests[0].resolve({id:'old'}); await tick();
   assert.equal(h.requests.length, 2);
@@ -281,22 +281,22 @@ test('auto preview: debounces text, runs one scan at a time, and suppresses stal
 test('auto preview: clearing required input and stopping prevent queued scans', async () => {
   const h = previewHarness(), config = {mode:'list',targets:['/target'],listSource:'text',listText:'A.JPG'};
   h.controller.update(config, 400);
-  h.controller.update({...config,listText:''}, 400); h.flush();
+  h.controller.update({...config,listText:''}, 400); h.flush(); await tick();
   assert.equal(h.requests.length, 0);
-  h.controller.update(config, 400); h.controller.stop(); h.flush();
+  h.controller.update(config, 400); h.controller.stop(); h.flush(); await tick();
   assert.equal(h.requests.length, 0);
-  h.controller.update(config, 0); h.flush(); h.controller.stop();
+  h.controller.update(config, 0); h.flush(); await tick(); h.controller.stop();
   h.requests[0].resolve({id:'stopped'}); await tick();
   assert.equal(h.updates.some(update => update.plan?.id === 'stopped'), false);
 });
 test('auto preview: removing all tags suppresses an in-flight result and choosing tags again starts a fresh plan', async () => {
   const h = previewHarness(), config = { mode: 'tags', tagAction: 'color', base: '/base', targets: ['/target'], colors: ['green'] };
-  h.controller.update(config); h.flush();
-  h.controller.update({ ...config, colors: [] }); h.flush();
+  h.controller.update(config); h.flush(); await tick();
+  h.controller.update({ ...config, colors: [] }); h.flush(); await tick();
   h.requests[0].resolve({ id: 'obsolete' }); await tick();
   assert.equal(h.requests.length, 1);
   assert.equal(h.updates.some(update => update.plan?.id === 'obsolete'), false);
-  h.controller.update({ ...config, colors: ['red', 'blue'] }); h.flush();
+  h.controller.update({ ...config, colors: ['red', 'blue'] }); h.flush(); await tick();
   assert.deepEqual(h.requests[1].config.colors, ['red', 'blue']);
   h.requests[1].resolve({ id: 'multi' }); await tick();
   assert.equal(h.updates.some(update => update.plan?.id === 'multi'), true);

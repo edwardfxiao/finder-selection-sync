@@ -46,17 +46,23 @@ for (const expanded of [false, true]) {
   });
 }
 
-it('thumbnails are requested only as their rows approach the visible viewport', async () => {
+it.each(['workspace', 'expanded preview'] as const)('thumbnails in the %s load only as rows approach its scroll viewport', async surface => {
   const request = vi.fn<FinderAPI['image']>().mockResolvedValue(image);
   window.finder = { image: request } as unknown as FinderAPI;
   let observed!: IntersectionObserverCallback;
+  let options: IntersectionObserverInit | undefined;
   const disconnect = vi.fn();
   vi.stubGlobal('IntersectionObserver', class {
-    constructor(callback: IntersectionObserverCallback) { observed = callback; }
+    constructor(callback: IntersectionObserverCallback, settings?: IntersectionObserverInit) { observed = callback; options = settings; }
     observe() {}
     disconnect = disconnect;
   });
-  render(<I18nContext.Provider value={language}><ImageThumbnail file="/photos/photo.jpg" open={() => {}} /></I18nContext.Provider>);
+  const { container } = render(<I18nContext.Provider value={language}>
+    <div className={surface === 'workspace' ? 'workspace-scroll' : 'preview-dialog'}><div className="file-scroll">
+      <ImageThumbnail file="/photos/photo.jpg" open={() => {}} />
+    </div></div>
+  </I18nContext.Provider>);
+  expect(options?.root).toBe(container.querySelector(surface === 'workspace' ? '.workspace-scroll' : '.file-scroll'));
   expect(request).not.toHaveBeenCalled();
   act(() => observed([{ isIntersecting: false } as IntersectionObserverEntry], {} as IntersectionObserver));
   expect(request).not.toHaveBeenCalled();

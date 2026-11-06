@@ -9,17 +9,23 @@ export const fileSystem = process.versions.electron
   : nodeFs;
 const fs = fileSystem;
 
-export async function getFiles(directoryPath, recursive = true, depth = Infinity) {
+export async function getFiles(directoryPath, recursive = true, depth = Infinity, check = () => {}) {
   const result = [];
+  check();
   const canonicalRoot = await fs.realpath(directoryPath);
+  check();
   async function visit(currentPath, level) {
+    check();
     const expected = path.join(canonicalRoot, path.relative(directoryPath, currentPath));
     if (await fs.realpath(currentPath) !== expected) {
       throw new Error(`Directory changed or contains a substituted symlink during scan: ${currentPath}`);
     }
+    check();
     const entries = await fs.readdir(currentPath, { withFileTypes: true });
+    check();
     entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
+      check();
       if (entry.name.startsWith('.')) continue;
       const file = path.join(currentPath, entry.name);
       if (entry.isFile()) result.push(file);
@@ -27,6 +33,7 @@ export async function getFiles(directoryPath, recursive = true, depth = Infinity
     }
   }
   await visit(directoryPath, 0);
+  check();
   return result;
 }
 
@@ -69,8 +76,9 @@ export async function verifySnapshot(expected, { ignoreCtime = false } = {}) {
   }
 }
 
-export async function verifyInventory(inventory) {
-  const files = await getFiles(inventory.root, inventory.recursive, inventory.depth);
+export async function verifyInventory(inventory, check = () => {}) {
+  const files = await getFiles(inventory.root, inventory.recursive, inventory.depth, check);
+  check();
   if (files.length !== inventory.files.length || files.some((file, index) => file !== inventory.files[index])) {
     throw new Error(`Folder contents changed since planning; rerun preview: ${inventory.root}`);
   }

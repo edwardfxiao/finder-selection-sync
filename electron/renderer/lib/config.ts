@@ -1,20 +1,26 @@
 import type { Config, Mode } from '../types';
 export const finderColors = ['green', 'red', 'blue', 'orange', 'yellow', 'purple', 'gray'];
+export const finderColorCodes: Record<string, number> = { gray: 1, green: 2, purple: 3, blue: 4, yellow: 5, red: 6, orange: 7 };
 const common: Config = {
-  mode: 'orphans', base: '', targets: [], recursive: true, depth: '', mixed: false, referenceExt: 'NEF', matchBy: 'relative',
+  mode: 'orphans', base: '', targets: [], recursive: true, depth: '', mixed: false, referenceExt: '', matchBy: 'relative',
   tagAction: 'sync', colors: ['green'], select: 'matched', scope: 'targets', match: 'any', mergeTags: true, includeClear: false,
   listSource: 'file', list: '', listText: '', listMode: 'keep', ignoreCase: false, includeExt: '', excludeExt: '',
+  nameContains: '', nameExcludes: '', nameRegex: '', invertFilter: false,
+  sizeMin: '', sizeMax: '', sizeUnit: 'MB', modifiedFrom: '', modifiedTo: '', filterAction: 'trash',
+  listAction: 'trash', compareAction: 'review', compareSelection: 'common',
 };
 export const defaults = (): Record<Mode, Config> => ({
   orphans: structuredClone(common), tags: { ...structuredClone(common), mode: 'tags' },
   list: { ...structuredClone(common), mode: 'list', matchBy: 'name' },
+  filter: { ...structuredClone(common), mode: 'filter', ignoreCase: true },
+  compare: { ...structuredClone(common), mode: 'compare', matchBy: 'name', scope: 'both' },
 });
 export function preferences() {
   const config = defaults();
   let mode: Mode = 'orphans';
   try {
     const saved = JSON.parse(localStorage.getItem('finder-workbench') || 'null');
-    if (['orphans', 'tags', 'list'].includes(saved?.mode)) mode = saved.mode;
+    if (['orphans', 'tags', 'list', 'filter', 'compare'].includes(saved?.mode)) mode = saved.mode;
     for (const key of Object.keys(config) as Mode[]) {
       if (saved?.config?.[key]) for (const field of Object.keys(common) as (keyof Config)[]) {
         const value = saved.config[key][field];
@@ -26,6 +32,11 @@ export function preferences() {
       }
       config[key].mode = key;
     }
+    // Tagging is a separate selection action; old preferences must not switch
+    // the filename-list workflow away from its original cleanup rules.
+    config.list.listAction = 'trash';
+    config.filter.filterAction = 'trash';
+    config.compare.compareAction = 'review';
   } catch { /* Use defaults if preferences are unavailable. */ }
   return { mode, config };
 }

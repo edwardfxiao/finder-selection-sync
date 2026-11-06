@@ -11,17 +11,19 @@ const catalog: Catalog = { current: 'en-US', warnings: [], bundles: [{ code: 'en
 
 function setup(mode: Mode = 'tags', targets = ['/one/photos', '/two/photos']) {
   const config = defaults();
-  config[mode] = { ...config[mode], base: '/reference', targets, list: '/names.txt' };
+  config[mode] = { ...config[mode], base: '/reference', targets, list: '/names.txt', referenceExt: 'NEF' };
   localStorage.setItem('finder-workbench', JSON.stringify({ mode, config }));
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   const api = {
     version: vi.fn().mockResolvedValue('2.2.0'), locales: vi.fn().mockResolvedValue(catalog), history: vi.fn().mockResolvedValue([]), clearHistory: vi.fn().mockResolvedValue([]),
-    setLocale: vi.fn().mockResolvedValue(catalog), reloadLocales: vi.fn().mockResolvedValue(catalog), openLocaleFolder: vi.fn().mockResolvedValue(undefined),
+    setTheme: vi.fn().mockResolvedValue(undefined), setLocale: vi.fn().mockResolvedValue(catalog), reloadLocales: vi.fn().mockResolvedValue(catalog), openLocaleFolder: vi.fn().mockResolvedValue(undefined),
     choose: vi.fn<FinderAPI['choose']>().mockResolvedValue([]), dropped: vi.fn().mockResolvedValue([]),
     preview: vi.fn<FinderAPI['preview']>().mockImplementation(async config => ({
       id: 'selection', mode: config.mode, createdAt: '', roots: config.targets, base: config.base, rows: [], conflicts: [], warnings: [], total: 0, candidates: 0,
     })),
     discard: vi.fn().mockResolvedValue(undefined), cancel: vi.fn().mockResolvedValue(undefined), execute: vi.fn().mockResolvedValue({ declined: true }),
+    activate: vi.fn().mockResolvedValue(null), discardAll: vi.fn().mockResolvedValue(undefined), selectedTags: vi.fn().mockResolvedValue([]),
+    tagSelected: vi.fn<FinderAPI['tagSelected']>().mockResolvedValue({ declined: true }),
     reveal: vi.fn().mockResolvedValue(undefined), copyPath: vi.fn().mockResolvedValue(undefined), exportResult: vi.fn().mockResolvedValue(false),
     image: vi.fn().mockRejectedValue(new Error('No images in folder selection fixtures')),
     onProgress: vi.fn(() => () => {}),
@@ -31,7 +33,29 @@ function setup(mode: Mode = 'tags', targets = ['/one/photos', '/two/photos']) {
 }
 afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); });
 
-for (const mode of ['orphans', 'tags', 'list'] as const) {
+it('Compare folders replaces A and B independently, cancels without changes and rejects multiple dropped folders', async () => {
+  const api = setup('compare', ['/folder-b']), user = userEvent.setup();
+  api.choose.mockResolvedValueOnce(['/new-a']).mockResolvedValueOnce(['/new-b']).mockResolvedValueOnce([]);
+  render(<App />);
+  await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(1));
+  expect(screen.queryByRole('button', { name: 'Add target folder' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: '/reference' }));
+  expect(api.choose).toHaveBeenLastCalledWith('compareA');
+  await waitFor(() => expect(api.preview).toHaveBeenLastCalledWith(expect.objectContaining({ base: '/new-a', targets: ['/folder-b'] })));
+  await user.click(screen.getByRole('button', { name: '/folder-b' }));
+  expect(api.choose).toHaveBeenLastCalledWith('compareB');
+  await waitFor(() => expect(api.preview).toHaveBeenLastCalledWith(expect.objectContaining({ base: '/new-a', targets: ['/new-b'] })));
+  await user.click(screen.getByRole('button', { name: '/new-b' }));
+  expect(api.preview).toHaveBeenCalledTimes(3);
+  expect(document.querySelector('.is-picking')).toBeNull();
+  api.dropped.mockResolvedValueOnce(['/drop-a', '/drop-b']);
+  fireEvent.drop(screen.getByRole('button', { name: '/new-b' }).closest('.folder-card')!, { dataTransfer: { files: [] } });
+  await screen.findByRole('alert');
+  expect(JSON.parse(localStorage.getItem('finder-workbench')!).config.compare.targets).toEqual(['/new-b']);
+  expect(api.preview).toHaveBeenCalledTimes(3);
+});
+
+for (const mode of ['orphans', 'tags', 'list', 'filter'] as const) {
   it(`${mode}: clicking a target replaces only that row, while Add appends folders`, async () => {
     const api = setup(mode), user = userEvent.setup();
     api.choose.mockResolvedValueOnce(['/replacement']).mockResolvedValueOnce(['/third', '/fourth']);
@@ -58,7 +82,7 @@ for (const mode of ['orphans', 'tags', 'list'] as const) {
     const { container } = render(<App />);
     await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(1));
     const source = mode === 'list' ? '/names.txt' : '/reference';
-    for (const file of [source, '/one/photos', '/two/photos']) {
+    for (const file of [...(mode === 'filter' ? [] : [source]), '/one/photos', '/two/photos']) {
       const button = screen.getByRole('button', { name: file });
       const row = button.closest('.folder-item')!;
       await user.click(button);

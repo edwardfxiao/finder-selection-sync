@@ -9,12 +9,12 @@ import en from '../../locales/en-US.json';
 
 const messages = Object.fromEntries(Object.entries(en).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
 const language = makeTranslator({ current: 'en-US', warnings: [], bundles: [{ code: 'en-US', label: 'English', direction: 'ltr', messages }] });
-function Preview({ mode = 'tags', reveal, copyPath = () => {} }: { mode?: Mode; reveal: (file: string) => void; copyPath?: (file: string) => void }) {
+function Preview({ mode = 'tags', action = mode === 'tags' ? 'tags' : 'trash', reveal, copyPath = () => {} }: { mode?: Mode; action?: Plan['action']; reveal: (file: string) => void; copyPath?: (file: string) => void }) {
   const plan: Plan = {
-    id: 'menu', mode, createdAt: '', roots: ['/photos'], conflicts: [], warnings: [], total: 3, candidates: 2,
+    id: 'menu', mode, action, createdAt: '', roots: ['/photos'], conflicts: [], warnings: [], total: 3, candidates: 2,
     rows: ['one.jpg', 'sub/one.jpg', 'keep.jpg'].map((relative, i) => ({
       id: relative, relative, name: relative.split('/').at(-1)!, file: `/photos/${relative}`, root: '/photos', size: 100,
-      candidate: i < 2, action: i === 2 ? 'keep' : mode === 'tags' ? 'tags' : 'trash', reason: { key: 'reason.listKeepMiss' }, matches: [],
+      candidate: i < 2, action: i === 2 || action === 'review' ? 'keep' : action, reason: { key: 'reason.listKeepMiss' }, matches: [],
       currentTags: ['Blue\n4'], nextTags: ['Blue\n4', 'Green\n2'],
     })),
   };
@@ -22,7 +22,37 @@ function Preview({ mode = 'tags', reveal, copyPath = () => {} }: { mode?: Mode; 
   return <I18nContext.Provider value={language}><FileResults plan={plan} selected={selected} setSelected={setSelected} reveal={reveal} copyPath={copyPath} /></I18nContext.Provider>;
 }
 
-for (const mode of ['orphans', 'tags', 'list'] as const) {
+for (const mode of ['tags', 'filter'] as const) {
+  it(`${mode}: only checked files show tag changes, with selections shared by the workspace and expanded preview`, async () => {
+    const user = userEvent.setup();
+    render(<Preview mode={mode} action="tags" reveal={() => {}} />);
+    const row = (scope: Pick<typeof screen, 'getByRole'>, name: string) => scope.getByRole('checkbox', { name: `Process ${name}` }).closest<HTMLElement>('.file-row')!;
+    const expectCurrentOnly = (element: HTMLElement) => {
+      expect(within(element).getAllByRole('img', { name: 'Blue' })).toHaveLength(1);
+      expect(within(element).queryByRole('img', { name: 'Green' })).toBeNull();
+      expect(element.querySelector('.tag-change-arrow')).toBeNull();
+    };
+    expect(within(row(screen, 'one.jpg')).getByRole('img', { name: 'Green' })).toBeTruthy();
+    expectCurrentOnly(row(screen, 'sub/one.jpg'));
+    await user.click(screen.getByRole('checkbox', { name: 'Process sub/one.jpg' }));
+    expect(within(row(screen, 'sub/one.jpg')).getByRole('img', { name: 'Green' })).toBeTruthy();
+    await user.click(screen.getByRole('checkbox', { name: 'Process one.jpg' }));
+    expectCurrentOnly(row(screen, 'one.jpg'));
+
+    await user.click(screen.getByRole('button', { name: 'Expand preview' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    expectCurrentOnly(row(dialog, 'one.jpg'));
+    expect(within(row(dialog, 'sub/one.jpg')).getByRole('img', { name: 'Green' })).toBeTruthy();
+    await user.click(dialog.getByRole('button', { name: 'Deselect all' }));
+    expectCurrentOnly(row(dialog, 'sub/one.jpg'));
+    await user.click(dialog.getByRole('button', { name: 'Back to workspace' }));
+    expectCurrentOnly(row(screen, 'sub/one.jpg'));
+    await user.click(screen.getByRole('button', { name: mode === 'filter' ? 'Select all results' : 'Select all changes' }));
+    for (const name of ['one.jpg', 'sub/one.jpg']) expect(within(row(screen, name)).getByRole('img', { name: 'Green' })).toBeTruthy();
+  });
+}
+
+for (const mode of ['orphans', 'tags', 'list', 'filter'] as const) {
   for (const expanded of [false, true]) {
     it(`${mode}, ${expanded ? 'dialog' : 'workspace'}: right-click reveals and copies the exact row without changing its selection`, async () => {
       const user = userEvent.setup(), reveal = vi.fn(), copyPath = vi.fn();
@@ -45,6 +75,7 @@ for (const mode of ['orphans', 'tags', 'list'] as const) {
       expect(copyPath).toHaveBeenCalledExactlyOnceWith('/photos/sub/one.jpg');
       expect(checkbox.getAttribute('aria-checked')).toBe('false');
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+      if (mode === 'filter') await user.click(scope.getByRole('checkbox', { name: 'Matches only' }));
       const protectedRow = scope.getByRole('checkbox', { name: 'Process keep.jpg' }).closest<HTMLElement>('.file-row')!;
       fireEvent.contextMenu(protectedRow, { clientX: 200, clientY: 400 });
       await screen.findByRole('menu', { name: 'keep.jpg' });

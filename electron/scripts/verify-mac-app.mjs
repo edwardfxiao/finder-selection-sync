@@ -98,7 +98,7 @@ async function smoke() {
     await request('Runtime.enable'); await request('Page.enable');
     await waitFor(() => evaluate(`document.readyState === 'complete' && !!window.finder &&
       !!document.querySelector('main.workspace nav, aside.sidebar nav') &&
-      document.querySelectorAll('aside.sidebar nav button:not(:disabled)').length === 3`), 'the loaded React interface');
+      document.querySelectorAll('aside.sidebar nav button:not(:disabled)').length === 5`), 'the loaded React interface');
     assert.equal(await evaluate('window.finder.version()'), version);
     assert.equal(await evaluate('window.finder.history().then(records => records.length)'), 0);
     assert.equal(await evaluate("document.querySelectorAll('[role=alert]').length"), 0);
@@ -106,6 +106,11 @@ async function smoke() {
     const plan = await evaluate(`window.finder.preview(${JSON.stringify(config)})`);
     assert.equal(plan.candidates, 1);
     assert.equal(plan.rows.find(row => row.candidate).name, 'B.JPG');
+    await evaluate('window.finder.discard()');
+    const filterConfig = { mode: 'filter', targets: [photos], nameRegex: '\\.jpg$', ignoreCase: true };
+    const filtered = await evaluate(`window.finder.preview(${JSON.stringify(filterConfig)})`);
+    assert.equal(filtered.candidates, 1);
+    assert.equal(filtered.rows.find(row => row.candidate).name, 'B.JPG');
     await evaluate('window.finder.discard()');
     assert.deepEqual(await fs.readdir(photos), ['A.NEF', 'B.JPG']);
     assert.deepEqual(exceptions, []);

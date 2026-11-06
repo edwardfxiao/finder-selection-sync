@@ -49,7 +49,7 @@ node bin/finder-selection-sync.js --help
 
 During development, `electron/node_modules/finder-selection-sync` links to the repository root, so changing the core does not require publishing it. `prepare-app.mjs` stages a standalone app in `electron/.build/app/`, including the current shared core and its own package metadata. Installed apps need neither that development link nor access to npm. Do not maintain a second copy of the core or edit generated staging files.
 
-Preserve the current UI behavior when making structural changes: automatic previews with skeleton loading; a stationary title toggle for folder options; fully clickable path regions with clear/reveal controls in all three modes; expanded preview, image thumbnails/viewer and row context menus; horizontal tag dots with a hollow circle for untagged files.
+Preserve the current UI behavior when making structural changes: automatic previews with skeleton loading; a stationary title toggle for folder options; fully clickable path regions with clear/reveal controls in all four modes; expanded preview, image thumbnails/viewer and row context menus; horizontal tag dots with a hollow circle for untagged files.
 
 ### Checks and local builds
 
@@ -69,7 +69,7 @@ npm run build:mac        # Local .app in electron/dist/
 npm run dist:mac         # Local .app and .dmg in electron/dist/
 ```
 
-UI tests run in jsdom and connect React to the desktop service and shared core through temporary files. They cover all three workflows, declined confirmations, checked-only execution, stale files, list editing, error recovery, delayed path requests across workflow switches, and a 1,004-file preview. OS dialogs, Trash and tag writes are substituted in those integration cases. Layout, trackpad behavior and native dialogs still require a manual macOS check. The image and filesystem smoke tests run in Electron.
+UI tests run in jsdom and connect React to the desktop service and shared core through temporary files. They cover all four workflows, declined confirmations, checked-only execution, stale files, list editing, error recovery, delayed path requests across workflow switches, and a 1,004-file preview. Filter tests include combined criteria, inverse results, date/size bounds, pagination and inverted selection. OS dialogs, Trash and tag writes are substituted in those integration cases. Layout, trackpad behavior and native dialogs still require a manual macOS check. The image and filesystem smoke tests run in Electron.
 
 The default CLI tests do not alter the user's Trash. To test real Finder deletion explicitly:
 
@@ -101,7 +101,7 @@ git push -u origin main
 
 If you copied the original project directory instead of using the transfer archive, check `git remote -v` first. To replace an existing remote, use `git remote set-url origin <your-repository-url>`.
 
-Before publishing, update the root `package.json` fields `repository`, `homepage`, `bugs` and `author`, plus `author` in `electron/package.json`. The `example` values in the commands above are placeholders; the package metadata in this checkout is configured for Example User. Keep the public npm package name and CLI command **`finder-selection-sync`**. The npm release check rejects the placeholder repository and verifies that the package repository matches the actual GitHub Actions repository.
+Before publishing, update the root `package.json` fields `repository`, `homepage`, `bugs` and `author`, plus `author` in `electron/package.json`. The `example` values in the commands above are placeholders; the package metadata in this checkout is configured for Edward Xiao. Keep the public npm package name and CLI command **`finder-selection-sync`**. The npm release check rejects the placeholder repository and verifies that the package repository matches the actual GitHub Actions repository.
 
 The desktop dependency `finder-selection-sync: file:..` is a local reference to this repository's core, not a registry download. The CLI executable name is controlled separately by the root `bin` field.
 

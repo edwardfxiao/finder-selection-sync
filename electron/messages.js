@@ -4,6 +4,10 @@ export function appError(key, params = {}) {
 }
 export function describeError(error) {
   if (error?.key) return { key: error.key, params: error.params ?? {}, raw: error.raw ?? error.message ?? error.key };
+  const filterErrors = { FILTER_TEXT: 'error.filterText', FILTER_OPTION: 'error.boolean', FILTER_EXTENSIONS: 'error.extensions',
+    FILTER_SIZE: 'error.filterSize', FILTER_DATE: 'error.filterDate', FILTER_REGEX: 'error.filterRegex',
+    FILTER_REGEX_TIMEOUT: 'error.filterRegexTimeout', FILTER_CANCELLED: 'error.cancelled' };
+  if (filterErrors[error?.code]) return { key: filterErrors[error.code], params: {} };
   const raw = error?.message || String(error);
   const rules = [
     [/Empty photo reference/, 'error.emptyReference'], [/Empty list/, 'error.emptyList'],

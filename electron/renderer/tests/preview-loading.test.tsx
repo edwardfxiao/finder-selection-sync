@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '@/app';
 import { defaults } from '@/lib/config';
@@ -25,9 +25,13 @@ function setup() {
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   const api = {
     version: vi.fn().mockResolvedValue('2.2.0'), locales: vi.fn().mockResolvedValue(catalog), history: vi.fn().mockResolvedValue([]), clearHistory: vi.fn().mockResolvedValue([]),
-    setLocale: vi.fn().mockResolvedValue(catalog), reloadLocales: vi.fn().mockResolvedValue(catalog), openLocaleFolder: vi.fn().mockResolvedValue(undefined),
+    setTheme: vi.fn().mockResolvedValue(undefined), setLocale: vi.fn().mockResolvedValue(catalog), reloadLocales: vi.fn().mockResolvedValue(catalog), openLocaleFolder: vi.fn().mockResolvedValue(undefined),
     choose: vi.fn().mockResolvedValue([]), dropped: vi.fn().mockResolvedValue([]), preview: vi.fn<FinderAPI['preview']>().mockResolvedValue(plan),
+    activate: vi.fn<FinderAPI['activate']>().mockResolvedValue(plan),
     discard: vi.fn().mockResolvedValue(undefined), cancel: vi.fn().mockResolvedValue(undefined), execute: vi.fn<FinderAPI['execute']>().mockResolvedValue({ declined: true }),
+    discardAll: vi.fn<FinderAPI['discardAll']>().mockResolvedValue(undefined),
+    tagSelected: vi.fn<FinderAPI['tagSelected']>().mockResolvedValue({ declined: true }),
+    selectedTags: vi.fn<FinderAPI['selectedTags']>().mockResolvedValue(plan.rows),
     reveal: vi.fn().mockResolvedValue(undefined), copyPath: vi.fn().mockResolvedValue(undefined), exportResult: vi.fn().mockResolvedValue(false),
     image: vi.fn().mockRejectedValue(new Error('No image decoder in this test')),
     onProgress: vi.fn((_callback: (progress: ProgressInfo) => void) => () => {}),
@@ -115,6 +119,8 @@ it('actual file operations retain their progress and stop controls', async () =>
   const { container } = render(<App />);
   await ready();
   await user.click(screen.getByRole('button', { name: 'Update tags on 1 files' }));
+  expect(container.querySelector('.progress-panel')).toBeNull();
+  await act(async () => api.onProgress.mock.calls[0][0]({ phase: 'verify', detail: { key: 'progress.verify' }, completed: 0, total: 1 }));
   expect(container.querySelector('.progress-panel')).toBeTruthy();
   expect(container.querySelector('[data-slot="skeleton"]')).toBeNull();
   expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
@@ -132,12 +138,33 @@ it('Reset all during a refresh rejects the old preview and a pending folder pick
   await user.click(screen.getByRole('button', { name: 'Refresh' }));
   await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(2));
   await user.click(screen.getByRole('button', { name: 'Reset all' }));
+  const dialog = within(await screen.findByRole('dialog', { name: 'Reset all workflows?' }));
+  await user.click(dialog.getByRole('button', { name: 'Reset all' }));
   await act(async () => { picker.resolve(['/late-folder']); scan.resolve({ ...plan, id: 'late-preview' }); });
   expect(screen.queryByRole('checkbox', { name: 'Process photo.jpg' })).toBeNull();
   expect(screen.queryByRole('button', { name: '/late-folder' })).toBeNull();
   expect(screen.queryByRole('alert')).toBeNull();
   expect((screen.getByRole('button', { name: 'Update tags on 0 files' }) as HTMLButtonElement).disabled).toBe(true);
-  expect(JSON.parse(localStorage.getItem('finder-workbench')!).config.tags).toMatchObject({ base: '', targets: [], list: '', listText: '' });
+  expect(JSON.parse(localStorage.getItem('finder-workbench')!).config).toEqual(defaults());
   expect(api.preview).toHaveBeenCalledTimes(2);
+  expect(api.execute).not.toHaveBeenCalled();
+});
+
+it('Escape dismisses global reset without cancelling an in-flight preview', async () => {
+  const api = setup(), scan = deferred<Plan>(), user = userEvent.setup();
+  api.preview.mockResolvedValueOnce(plan).mockReturnValueOnce(scan.promise);
+  render(<App />); await ready();
+  await user.click(screen.getByRole('button', { name: 'Refresh' }));
+  await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(2));
+  const cancelledBefore = api.cancel.mock.calls.length;
+  await user.click(screen.getByRole('button', { name: 'Reset all' }));
+  await screen.findByRole('dialog', { name: 'Reset all workflows?' });
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(api.cancel).toHaveBeenCalledTimes(cancelledBefore);
+  await act(async () => scan.resolve({ ...plan, id: 'after-dismissed-reset' }));
+  expect((await ready()).getAttribute('aria-checked')).toBe('true');
+  expect(screen.getByRole('button', { name: '/reference' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: '/photos' })).toBeTruthy();
   expect(api.execute).not.toHaveBeenCalled();
 });

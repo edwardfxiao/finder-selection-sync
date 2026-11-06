@@ -3,6 +3,24 @@ import { defaults, preferences } from '@/lib/config';
 
 afterEach(() => localStorage.clear());
 
+it('restores the fourth workflow and adds its defaults to older saved workspaces', () => {
+  localStorage.setItem('finder-workbench', JSON.stringify({ mode: 'list', config: { list: { targets: ['/photos'] } } }));
+  expect(preferences().config.filter).toMatchObject({ mode: 'filter', targets: [], nameRegex: '', ignoreCase: true, invertFilter: false });
+  const config = defaults();
+  config.filter = { ...config.filter, nameRegex: '^IMG_', invertFilter: true, modifiedFrom: '2026-01-01', targets: ['/photos'] };
+  localStorage.setItem('finder-workbench', JSON.stringify({ mode: 'filter', config }));
+  expect(preferences()).toEqual({ mode: 'filter', config });
+});
+
+it('restores comparison and migrates list tagging back to independent cleanup and selection actions', () => {
+  expect(preferences().config.compare).toMatchObject({ mode: 'compare', matchBy: 'name', compareSelection: 'common', scope: 'both' });
+  const config = defaults();
+  config.compare = { ...config.compare, base: '/a', targets: ['/b'], compareSelection: 'onlyA', colors: [] };
+  config.list.listAction = 'tags';
+  localStorage.setItem('finder-workbench', JSON.stringify({ mode: 'compare', config }));
+  expect(preferences()).toEqual({ mode: 'compare', config: { ...config, list: { ...config.list, listAction: 'trash' } } });
+});
+
 it('migrates a saved single color without resetting other workflow preferences', () => {
   localStorage.setItem('finder-workbench', JSON.stringify({ mode: 'tags', config: {
     tags: { tagAction: 'color', color: 'purple', base: '/reference', targets: ['/target'], select: 'unmatched' },

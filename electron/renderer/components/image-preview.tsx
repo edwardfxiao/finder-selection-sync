@@ -7,13 +7,14 @@ import { useI18n } from '@/lib/i18n';
 import { basename } from '@/lib/config';
 import type { ImagePreview } from '@/types';
 
-export function ImageThumbnail({ file, open }: { file: string; open: (button: HTMLButtonElement) => void }) {
+export function ImageThumbnail({ file, open, enabled = true }: { file: string; open: (button: HTMLButtonElement) => void; enabled?: boolean }) {
   const { t } = useI18n();
   const button = useRef<HTMLButtonElement>(null);
   const [image, setImage] = useState<string | null>(null), [loading, setLoading] = useState(true);
   useEffect(() => {
     let alive = true, requested = false;
     setImage(null); setLoading(true);
+    if (!enabled) return;
     let observer: IntersectionObserver | undefined;
     const load = () => {
       if (requested) return;
@@ -26,13 +27,13 @@ export function ImageThumbnail({ file, open }: { file: string; open: (button: HT
     if (typeof IntersectionObserver === 'undefined') load();
     else if (button.current) {
       observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) load(); }, {
-        root: button.current.closest('.file-scroll'), rootMargin: '160px',
+        root: button.current.closest('.workspace-scroll, .preview-dialog .file-scroll'), rootMargin: '160px',
       });
       observer.observe(button.current);
     }
     return () => { alive = false; observer?.disconnect(); };
-  }, [file]);
-  return <button ref={button} type="button" className="image-thumbnail" aria-label={t('image.open', { name: basename(file) })} title={t('image.open', { name: basename(file) })} onClick={event => open(event.currentTarget)}>
+  }, [file, enabled]);
+  return <button ref={button} type="button" className="image-thumbnail" disabled={!enabled} aria-label={t('image.open', { name: basename(file) })} title={t('image.open', { name: basename(file) })} onClick={event => open(event.currentTarget)}>
     {image ? <img src={image} alt="" decoding="async" draggable={false} onError={() => setImage(null)} /> : loading ? <Skeleton className="size-full" /> : <FileImage size={18} strokeWidth={1.5} />}
   </button>;
 }

@@ -42,6 +42,10 @@ test('packaged desktop resolves its own shared core and preserves independent ve
   const plan = await service.preview({ mode: 'orphans', mixed: true, base: target, referenceExt: 'nef' });
   assert.equal(plan.candidates, 1);
   assert.equal(plan.rows.find(row => row.candidate).name, 'B.JPG');
+  const filtered = await service.preview({ mode: 'filter', targets: [target], nameRegex: '\\.jpg$', ignoreCase: true });
+  assert.equal(filtered.mode, 'filter');
+  assert.equal(filtered.candidates, 1);
+  assert.equal(filtered.rows.find(row => row.candidate).name, 'B.JPG');
   await assert.rejects(fs.access(path.join(outputDirectory, 'renderer')));
   await assert.rejects(fs.access(path.join(outputDirectory, 'node_modules/electron')));
 });

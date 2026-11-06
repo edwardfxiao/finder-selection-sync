@@ -20,7 +20,6 @@ function Preview() {
   const [selected, setSelected] = useState(new Set(plan.rows.filter(row => row.candidate).map(row => row.id)));
   return <I18nContext.Provider value={language}><FileResults plan={plan} selected={selected} setSelected={setSelected} reveal={() => {}} copyPath={() => {}} /></I18nContext.Provider>;
 }
-// Real Radix focus traversal over 205 rows can exceed 5s on shared CI runners.
 it('expanded preview preserves search, pagination and selection when returning to the workspace', { timeout: 20000 }, async () => {
   const user = userEvent.setup();
   render(<Preview />);
@@ -41,18 +40,24 @@ it('expanded preview preserves search, pagination and selection when returning t
   await user.click(open);
   const reopened = within(await screen.findByRole('dialog'));
   await user.clear(reopened.getByRole('searchbox'));
+  const list = reopened.getByRole('region', { name: 'Preview' }).querySelector<HTMLElement>('.file-scroll')!;
+  list.scrollTop = 1200;
   await user.click(reopened.getByRole('button', { name: 'Next' }));
   expect(reopened.getByRole('checkbox', { name: 'Process photo-100.jpg' })).toBeTruthy();
+  expect(list.scrollTop).toBe(0);
   await user.keyboard('{Escape}');
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(screen.getByRole('checkbox', { name: 'Process photo-100.jpg' })).toBeTruthy();
 });
-it('the changes-only filter remains shared and protected files cannot be checked in the dialog', { timeout: 20000 }, async () => {
+it('the changes-only filter remains shared while kept list files can be checked for independent tagging', { timeout: 20000 }, async () => {
   const user = userEvent.setup();
   render(<Preview />);
   await user.click(screen.getByRole('button', { name: 'Expand preview' }));
   const dialog = within(await screen.findByRole('dialog'));
-  expect((dialog.getByRole('checkbox', { name: 'Process photo-010.jpg' }) as HTMLButtonElement).disabled).toBe(true);
+  const kept = dialog.getByRole('checkbox', { name: 'Process photo-010.jpg' });
+  expect((kept as HTMLButtonElement).disabled).toBe(false);
+  await user.click(kept);
+  expect(kept.getAttribute('aria-checked')).toBe('true');
   await user.click(dialog.getByRole('checkbox', { name: 'Changes only' }));
   expect(dialog.queryByRole('checkbox', { name: 'Process photo-010.jpg' })).toBeNull();
   await user.click(dialog.getByRole('button', { name: 'Close' }));

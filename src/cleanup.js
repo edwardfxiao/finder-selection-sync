@@ -203,9 +203,17 @@ export async function moveToTrash(file, exec = execute) {
 
 export async function executeCleanup(plan, options, { trash = moveToTrash, unlink = fs.unlink, shouldCancel = () => false } = {}) {
   if (!options.apply) return { plan, completed: 0, failures: [] };
+  const cancelled = new Error('Cleanup cancelled');
+  const check = () => { if (shouldCancel()) throw cancelled; };
   // Verify the whole plan before the first mutation, then each candidate again.
-  for (const inventory of plan.inventories ?? []) await verifyInventory(inventory);
-  for (const snapshot of plan.snapshots) await verifySnapshot(snapshot);
+  try {
+    for (const inventory of plan.inventories ?? []) await verifyInventory(inventory, check);
+    for (const snapshot of plan.snapshots) { check(); await verifySnapshot(snapshot); }
+    check();
+  } catch (error) {
+    if (error === cancelled) return { plan, completed: 0, failures: [], cancelled: true };
+    throw error;
+  }
   const snapshots = new Map(plan.snapshots.map(snapshot => [snapshot.file, snapshot]));
   const failures = [];
   const changedInodes = new Set();
@@ -213,8 +221,8 @@ export async function executeCleanup(plan, options, { trash = moveToTrash, unlin
   for (const file of plan.filesToUpdate) {
     if (shouldCancel()) return { plan, completed, failures, cancelled: true };
     try {
-      for (const reference of plan.liveSnapshots ?? []) await verifySnapshot(reference);
-      if (plan.verifyReference) await plan.verifyReference(file);
+      for (const reference of plan.liveSnapshots ?? []) { check(); await verifySnapshot(reference); }
+      if (plan.verifyReference) await plan.verifyReference(file, check);
       const snapshot = snapshots.get(file);
       if (!snapshot) throw new Error(`Missing safety snapshot: ${file}`);
       const identity = `${snapshot.dev}:${snapshot.ino}`;
@@ -227,6 +235,7 @@ export async function executeCleanup(plan, options, { trash = moveToTrash, unlin
       changedInodes.add(identity);
       completed += 1;
     } catch (error) {
+      if (error === cancelled) return { plan, completed, failures, cancelled: true };
       failures.push({ file, error });
       // Stop on the first error; no silent fallback from Trash to permanent deletion.
       break;
@@ -242,7 +251,8 @@ function createReferenceVerifier(options, targetGroups) {
     for (const file of targetGroups[i]) rootsByFile.set(file, options.targets[i]);
   }
   const directories = new Map();
-  async function readDirectory(directory) {
+  async function readDirectory(directory, check) {
+    check();
     let stat;
     try {
       stat = await fs.stat(directory, { bigint: true });
@@ -250,14 +260,17 @@ function createReferenceVerifier(options, targetGroups) {
       if (error.code === 'ENOENT' && directory !== options.base) return null;
       throw error;
     }
+    check();
     if (!stat.isDirectory() || await fs.realpath(directory) !== directory) {
       throw new Error(`Reference directory changed or contains a symlink: ${directory}`);
     }
+    check();
     let cached = directories.get(directory);
     if (!cached || cached.dev !== stat.dev || cached.ino !== stat.ino
       || cached.mtime !== stat.mtimeNs || cached.ctime !== stat.ctimeNs) {
       const entries = (await fs.readdir(directory, { withFileTypes: true }))
         .filter(entry => !entry.name.startsWith('.'));
+      check();
       cached = { dev: stat.dev, ino: stat.ino, mtime: stat.mtimeNs, ctime: stat.ctimeNs,
         subdirectories: entries.filter(entry => entry.isDirectory()).map(entry => entry.name),
         referenceNames: new Set(entries.filter(entry => entry.isFile()
@@ -266,31 +279,34 @@ function createReferenceVerifier(options, targetGroups) {
     }
     return cached;
   }
-  async function hasName(directory, name, level = 0) {
-    const current = await readDirectory(directory);
+  async function hasName(directory, name, check, level = 0) {
+    const current = await readDirectory(directory, check);
     if (!current) return false;
     if (current.referenceNames.has(name)) return true;
     if (options.recursive !== false && level < (options.depth ?? Infinity)) {
       for (const subdirectory of current.subdirectories) {
-        if (await hasName(path.join(directory, subdirectory), name, level + 1)) return true;
+        check();
+        if (await hasName(path.join(directory, subdirectory), name, check, level + 1)) return true;
       }
     }
     return false;
   }
-  return async file => {
+  return async (file, check = () => {}) => {
+    check();
     const name = normalize(stem(file), true);
     let matched = false;
     if (options.matchBy === 'name') {
-      matched = await hasName(options.base, name);
+      matched = await hasName(options.base, name, check);
     } else {
       const relativeDirectory = path.dirname(path.relative(rootsByFile.get(file), file));
       let parents = [options.base];
       // Resolve each component with the same case/Unicode rules as the planner.
       // More than one directory may match on a case-sensitive filesystem.
       for (const component of relativeDirectory === '.' ? [] : relativeDirectory.split(path.sep)) {
+        check();
         const next = [];
         for (const parent of parents) {
-          const current = await readDirectory(parent);
+          const current = await readDirectory(parent, check);
           for (const subdirectory of current?.subdirectories ?? []) {
             if (normalize(subdirectory, true) === normalize(component, true)) next.push(path.join(parent, subdirectory));
           }
@@ -298,15 +314,26 @@ function createReferenceVerifier(options, targetGroups) {
         parents = next;
       }
       for (const parent of parents) {
-        if ((await readDirectory(parent))?.referenceNames.has(name)) { matched = true; break; }
+        if ((await readDirectory(parent, check))?.referenceNames.has(name)) { matched = true; break; }
       }
     }
+    check();
     if (matched) throw new Error(`A matching reference appeared since planning; rerun preview: ${file}`);
   };
 }
 
-export async function prepareCleanup(options) {
-  const targets = await Promise.all(options.targets.map(directoryRoot));
+async function settleAll(promises) {
+  // A cancelled or failed sibling cannot outlive its plan and overlap a new scan.
+  const results = await Promise.allSettled(promises);
+  const failure = results.find(result => result.status === 'rejected');
+  if (failure) throw failure.reason;
+  return results.map(result => result.value);
+}
+
+export async function prepareCleanup(options, { check = () => {} } = {}) {
+  check();
+  const targets = await settleAll(options.targets.map(directoryRoot));
+  check();
   assertSeparateRoots(targets);
   const resolved = { ...options, targets };
   let plan;
@@ -314,37 +341,49 @@ export async function prepareCleanup(options) {
   let listSnapshot;
   const inventories = [];
   async function scan(root) {
-    const files = await getFiles(root, options.recursive, options.depth);
+    const files = await getFiles(root, options.recursive, options.depth, check);
+    check();
     inventories.push({ root, files, recursive: options.recursive, depth: options.depth });
     return files;
   }
+  async function snapshot(file) {
+    check();
+    const value = await snapshotFile(file);
+    check();
+    return value;
+  }
   if (options.command === 'clean-orphans') {
     resolved.base = await directoryRoot(options.base);
+    check();
     if (!options.mixed) assertSeparateRoots([resolved.base, ...targets]);
     const baseFiles = await scan(resolved.base);
-    const groups = options.mixed ? [baseFiles] : await Promise.all(targets.map(scan));
+    const groups = options.mixed ? [baseFiles] : await settleAll(targets.map(scan));
+    check();
     plan = createPhotoPlan(baseFiles, groups, resolved);
     plan.verifyReference = createReferenceVerifier(resolved, groups);
     protectedFiles = plan.protectedFiles;
   } else {
     resolved.list = await fs.realpath(path.resolve(options.list));
-    listSnapshot = await snapshotFile(resolved.list);
+    listSnapshot = await snapshot(resolved.list);
     let content;
     try {
       content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await fs.readFile(resolved.list));
     } catch (error) {
       throw new Error(`Unable to read UTF-8 list: ${error.message}`);
     }
+    check();
     await verifySnapshot(listSnapshot);
+    check();
     const keys = parseList(content, resolved);
-    const groups = await Promise.all(targets.map(scan));
+    const groups = await settleAll(targets.map(scan));
+    check();
     plan = createListPlan(groups, keys, resolved);
     protectedFiles = [resolved.list];
     plan.listEntries = keys.size;
   }
-  const protectedSnapshots = await Promise.all(protectedFiles.map(snapshotFile));
+  const protectedSnapshots = await settleAll(protectedFiles.map(snapshot));
   const protectedIds = new Set(protectedSnapshots.map(item => `${item.dev}:${item.ino}`));
-  const candidates = await Promise.all(plan.filesToUpdate.map(snapshotFile));
+  const candidates = await settleAll(plan.filesToUpdate.map(snapshot));
   // Protect hard links to the reference/list as well as their original paths.
   const selected = candidates.filter(item => !protectedIds.has(`${item.dev}:${item.ino}`));
   plan.filesToUpdate = selected.map(item => item.file);
@@ -354,6 +393,7 @@ export async function prepareCleanup(options) {
   plan.liveSnapshots = listSnapshot ? [listSnapshot] : [];
   plan.inventories = inventories;
   if (listSnapshot) await verifySnapshot(listSnapshot);
+  check();
   return plan;
 }
 

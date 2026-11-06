@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, protocol, session, shell } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,9 @@ const service = new DesktopService({
     }
   },
 });
+function updateWindowTheme() {
+  if (window && !window.isDestroyed()) window.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#292928' : '#f4f4f2');
+}
 const images = new ImagePreviews({
   isAllowed: file => !!service.active?.rows.some(row => row.file === file),
   decode: async (file, size) => {
@@ -64,14 +67,14 @@ async function task(fn) {
     running = null;
     if (window && !window.isDestroyed()) window.setProgressBar(-1);
     if (closePending) {
-      await service.discard();
+      await service.discardAll();
       window?.destroy();
       if (quitPending) app.quit();
     }
   }
 }
 async function checkedPaths(paths, kind) {
-  if (!['base', 'targets', 'list'].includes(kind) || !Array.isArray(paths) || !paths.length || paths.length > 32) throw appError('error.path');
+  if (!['base', 'targets', 'list', 'compareA', 'compareB'].includes(kind) || !Array.isArray(paths) || !paths.length || paths.length > 32) throw appError('error.path');
   if (kind !== 'targets' && paths.length !== 1) throw appError('error.singlePath');
   const result = [];
   for (const input of paths) {
@@ -93,10 +96,15 @@ function knownPath(file) {
 }
 
 async function start() {
-  // Development uses the stock Electron bundle; packaged apps have an embedded icon.
+  // Development needs an explicit icon for both the Dock and native dialogs.
+  // Packaged apps use their embedded bundle icon.
+  let appIcon;
   if (process.platform === 'darwin' && !app.isPackaged) {
     const icon = nativeImage.createFromPath(path.join(here, 'build', 'icon.png'));
-    if (!icon.isEmpty()) app.dock.setIcon(icon);
+    if (!icon.isEmpty()) {
+      appIcon = icon;
+      app.dock.setIcon(icon);
+    }
   }
   localeDirectory = path.join(app.getPath('userData'), 'locales');
   preferencePath = path.join(app.getPath('userData'), 'preferences.json');
@@ -125,6 +133,12 @@ async function start() {
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   handle('version', () => app.getVersion());
+  handle('theme', source => {
+    if (!['light', 'dark', 'system'].includes(source)) throw appError('error.option', { value: String(source) });
+    nativeTheme.themeSource = source;
+    updateWindowTheme();
+  });
+  nativeTheme.on('updated', updateWindowTheme);
   handle('locales', () => ({ ...catalog, current: locale }));
   handle('locale', async code => {
     if (!catalog.bundles.some(b => b.code === code)) throw appError('error.locale');
@@ -152,10 +166,10 @@ async function start() {
     if (error) throw new Error(error);
   });
   handle('choose', async ({ kind, replace } = {}) => {
-    if (!['base', 'targets', 'list'].includes(kind)) throw appError('error.path');
+    if (!['base', 'targets', 'list', 'compareA', 'compareB'].includes(kind)) throw appError('error.path');
     if (replace !== undefined && (kind !== 'targets' || typeof replace !== 'string' || !path.isAbsolute(replace) || replace.includes('\0'))) throw appError('error.path');
     const result = await dialog.showOpenDialog(window, {
-      title: t(replace ? 'dialog.replaceTarget' : kind === 'list' ? 'dialog.chooseList' : kind === 'base' ? 'dialog.chooseBase' : 'dialog.chooseTargets'),
+      title: t(replace ? 'dialog.replaceTarget' : kind === 'compareA' ? 'compare.chooseA' : kind === 'compareB' ? 'compare.chooseB' : kind === 'list' ? 'dialog.chooseList' : kind === 'base' ? 'dialog.chooseBase' : 'dialog.chooseTargets'),
       defaultPath: replace, buttonLabel: t(replace ? 'folder.change' : 'folder.choose'),
       properties: kind === 'list' ? ['openFile'] : kind === 'targets' && !replace ? ['openDirectory', 'multiSelections'] : ['openDirectory'],
     });
@@ -164,19 +178,25 @@ async function start() {
   });
   handle('paths', ({ paths, kind } = {}) => checkedPaths(paths, kind));
   handle('preview', config => task(() => service.preview(config)));
-  handle('discard', () => service.discard());
+  handle('activate', id => task(() => service.activate(id)));
+  handle('discard', mode => service.discard(mode));
+  handle('discard-all', () => service.discardAll());
   handle('cancel', () => { service.cancel(); return true; });
-  handle('execute', ({ id, selectedIds } = {}) => task(() => service.execute(id, selectedIds, {
+  const confirmation = {
     confirm: async summary => {
       const action = t(summary.action === 'trash' ? 'dialog.trash' : 'dialog.tags');
       const { response } = await dialog.showMessageBox(window, {
+        icon: appIcon,
         type: 'question', title: t('dialog.confirmTitle'), message: t('dialog.summary', { action, count: summary.count }),
         detail: t('dialog.detail', { roots: summary.roots.join('\n'), note: t(summary.action === 'trash' ? 'dialog.trashNote' : 'dialog.tagsNote') }),
         buttons: [t('dialog.cancel'), action], defaultId: 0, cancelId: 0, noLink: true,
       });
       return response === 1;
     },
-  })));
+  };
+  handle('execute', ({ id, selectedIds } = {}) => task(() => service.execute(id, selectedIds, confirmation)));
+  handle('tag-selected', ({ id, selectedIds, options } = {}) => task(() => service.tagSelected(id, selectedIds, options, confirmation)));
+  handle('selected-tags', ({ id, selectedIds } = {}) => task(() => service.selectedTags(id, selectedIds)));
   handle('history', () => service.history);
   handle('clear-history', () => {
     if (running) throw appError('error.busy');
@@ -220,7 +240,7 @@ function createWindow() {
   window = new BrowserWindow({
     width: 1180, height: 860, minWidth: 860, minHeight: 660,
     title: 'Finder Selection Sync', titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 18 },
-    backgroundColor: '#f4f4f2', show: false,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#292928' : '#f4f4f2', show: false,
     webPreferences: { preload: path.join(here, 'preload.cjs'), nodeIntegration: false, contextIsolation: true,
       sandbox: true, webSecurity: true, spellcheck: false, devTools: !app.isPackaged },
   });
@@ -228,11 +248,11 @@ function createWindow() {
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.on('will-attach-webview', event => event.preventDefault());
   window.webContents.on('did-fail-load', (_event, code, description) => console.error('Page load failed:', code, description));
-  window.webContents.on('render-process-gone', () => { service.cancel(); if (!running) service.discard().catch(console.error); });
+  window.webContents.on('render-process-gone', () => { service.cancel(); if (!running) service.discardAll().catch(console.error); });
   window.once('ready-to-show', () => window.show());
   window.on('close', event => {
     if (running) { event.preventDefault(); closePending = true; service.cancel(); }
-    else service.discard().catch(console.error);
+    else service.discardAll().catch(console.error);
   });
   window.on('closed', () => { window = null; });
   window.loadURL(entryURL);

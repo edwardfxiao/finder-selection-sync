@@ -1,6 +1,6 @@
 # finder-selection-sync
 
-Organize files on macOS: sync Finder tags, find files without matching originals, or keep and remove files using a filename list. Available as a desktop app and a command-line tool.
+Organize files on macOS: sync Finder tags, clean up files, filter folders, or compare filenames across two folders. Available as a desktop app and a command-line tool.
 
 Preview changes before applying them. Desktop cleanup moves files to Trash; tag operations update Finder tags without moving files.
 
@@ -14,9 +14,11 @@ The desktop download supports Apple Silicon Macs (M-series). It does not require
 
 ### Choose a workflow
 
-- **Clean by reference** — Keep a reference format, such as NEF, CR3 or JPG, and find other files without a matching original. Choose **Same folder** if originals and exports are together, or **Separate folders** if they are stored apart.
+- **Clean by reference** — Enter a reference format, such as NEF, CR3 or JPG, to keep that format and find other files without a matching original. Choose **Same folder** if originals and exports are together, or **Separate folders** if they are stored apart.
 - **Finder tags** — Copy tags from reference files to matching target files. **Keep existing target tags** is enabled by default. Use **Set tags** to replace existing tags with one or more selected colors, or **Clear tags** to remove them.
-- **Organize by list** — Load a UTF-8 text file or paste one filename per line. Choose whether to keep the listed files or move the listed files to Trash.
+- **Organize by list** — Load a UTF-8 text file or paste one filename per line. Choose whether to keep listed files or move listed files to Trash. You can also check any preview files and use the separate **Set tags** action.
+- **Filter files** — Search one or more folders by filename text, regular expression, extension, size and modification date. Choose whether to include subfolders and set a maximum depth. Browse matches without changing files, or check results to set Finder tags or move them to Trash after confirmation.
+- **Compare folders** — Find filenames present in both folders, only in one folder, or in either folder but not both. Check files on either side to set Finder tags. By default, matching uses the full filename, including its extension, and ignores subdirectories. This compares names, not file contents; relative-path and filename-stem matching are also available.
 
 ### Preview and apply
 
@@ -25,11 +27,31 @@ The desktop download supports Apple Silicon Macs (M-series). It does not require
 3. Review the planned actions and uncheck any files you want to leave alone. Use search, **Changes only**, or **Expand preview** to inspect a large list.
 4. Click the action button at the bottom and confirm. Only checked files are processed.
 
-Click the workflow title to collapse or expand folder options. Click an image thumbnail for a larger view. Right-click a preview item to **Show in Finder** or **Copy pathname**.
+Click the workflow title to collapse or expand folder options. Conditions and preview rows scroll together in the main workspace. Scrolling does not automatically collapse or expand options; preview controls and the bottom action bar remain accessible. Click an image thumbnail for a larger view. Right-click a preview item to **Show in Finder** or **Copy pathname**.
 
-The **×** beside a folder removes it from the current setup. **Reset all** clears the folders and filename list in the current workflow. Neither action deletes files. In the tag picker, **Clear selection** deselects colors; use the separate **Clear tags** action to remove tags from files.
+Click anywhere on a file row to toggle its checkbox. **Shift-click** selects a range; **Command-click** toggles individual files and **Command-Shift-click** adds a range while keeping other selections. The keyboard button beside the selection count shows the available shortcuts:
+
+- **↑ / ↓** selects the previous or next file; hold **Shift** to extend or shrink the range.
+- **Option-↑ / ↓** selects the first or last result; **Shift-Option-↑ / ↓** selects through that end of the results.
+- **Command-A** selects all selectable results across pages; **Shift-Command-A** deselects all. Search fields keep their normal text-selection shortcuts.
+
+Range selection follows the current search and filter results, works across pages, and skips files whose checkboxes are disabled.
+
+The **×** beside a folder removes it from the current setup. **Reset workflow** clears the current page's folders, inputs and selections. **Reset all** at the bottom of the sidebar clears all five workflows after confirmation, while keeping your language, appearance and Activity records. Neither action changes files or their tags.
+
+Each workflow keeps its preview, checked files, search and scroll position when you switch sidebar pages during the current session. Returning to a page does not rescan it. Use **Refresh** after changing files in Finder; changing rules or applying an operation also updates the preview. Files are checked again before an operation runs.
 
 **Activity** shows results for the current app session. Use **Clear all** to clear those records, or **Export report** to save a report yourself. Activity is not saved automatically after quitting.
+
+In **Filter files**, all filled conditions must match; blank fields impose no restriction. Enter extensions separated by commas (such as `.jpg, .png`). Regex patterns match the filename including its extension, without `/` delimiters. Modification dates include both the start and end day in local time; sizes use 1024 bytes per KB. A depth of `0` scans only the chosen folders, `1` also includes one subfolder level, and blank means unlimited. Hidden files and symbolic links are skipped. Overlapping search folders are combined without duplicate files.
+
+**Invert filter results** finds files that fail the combined conditions, including extension exclusions. **Invert selection** toggles checkboxes across all pages of the current search results. Filter results start unchecked; refreshing or changing a condition clears the selection. **Clear filters** resets conditions while keeping the folders and scan depth.
+
+In **Organize by list**, **Filter files** and **Compare folders**, check files and click **Set tags** beside the selection count. The same dialog lets you add or replace color tags, or choose **Clear file tags** to remove all tags. Review **Current → After**, then apply and confirm. **Deselect colors** only resets the color choices in the dialog; it does not remove tags from files. Choosing colors does not rescan the folders or change your file selection. Compare results start unchecked.
+
+In **Organize by list**, you can tag checked files marked **Keep** or excluded from cleanup by extension filters. Tagging does not change the list rules or move files. The bottom **Move to Trash** button processes only checked cleanup candidates; kept files remain protected. Use **Clear extension filters** to remove the extension restrictions on cleanup. Updated tags appear beside filenames after applying.
+
+The **Appearance** menu in the title bar offers **Light**, **Dark**, and **Follow system**. Your choice is remembered between launches.
 
 ### Languages
 

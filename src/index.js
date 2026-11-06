@@ -6,6 +6,8 @@ import { promisify } from 'node:util';
 import { fileSystem as fs, getFiles, directoryRoot, assertSeparateRoots, snapshotFile } from './files.js';
 import { parseCleanupArgs, runCleanup, cleanupUsage, executeCleanup } from './cleanup.js';
 export { getFiles } from './files.js';
+export { filterFiles, validateFileFilters } from './filter.js';
+export { compareFolderFiles } from './compare.js';
 export { parseCleanupArgs, prepareCleanup, executeCleanup, createPhotoPlan, createListPlan, parseList } from './cleanup.js';
 
 const execFile = promisify(execFileCallback);
